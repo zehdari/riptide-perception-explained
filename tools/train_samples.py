@@ -9,7 +9,8 @@ size, and every label as [class name, [x0, y0, x1, y1, ...]] in normalized image
 """
 import json, os
 from pathlib import Path
-import cv2, yaml
+import cv2
+import numpy as np, yaml
 
 HOME = Path.home()
 OUT = Path(__file__).resolve().parents[1] / 'public'
@@ -36,8 +37,10 @@ for cam, name in PICKS:
     for line in open(lbl) if lbl.exists() else []:
         v = list(map(float, line.split()))
         pts = v[1:]
-        step = max(1, len(pts) // 2 // 60)
-        thin = [round(p, 4) for i in range(0, len(pts) // 2, step) for p in pts[2 * i:2 * i + 2]]
+        # simplify with Douglas-Peucker at 1 px (every-n-th-point thinning cut into thin slalom poles)
+        px = (np.array(pts).reshape(-1, 1, 2) * [w, h]).astype(np.float32)
+        simple = cv2.approxPolyDP(px, 1.0, True).reshape(-1, 2) / [w, h]
+        thin = [round(float(c), 4) for xy in simple for c in xy]
         labels.append([names[int(v[0])], thin])
     samples.append({'name': name, 'cam': cam, 'size': [w, h], 'labels': labels})
     print(cam, name, [l[0] for l in labels])

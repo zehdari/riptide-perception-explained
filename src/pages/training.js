@@ -87,7 +87,7 @@ const loadImg = (name) => (images[name] ||= new Promise((res) => { const im = ne
   const rand = () => ((rng = (rng * 1103515245 + 12345) >>> 0) >>> 8) / 16777216;
 
   // Draw one sample into a rectangle with the current geometric transform; return its polygons in canvas pixels.
-  function drawSample(im, x, rect, { geo = true, clipTo = null, paint = true } = {}) {
+  function drawSample(im, x, rect, { geo = true, clipTo = null, paint = true, box = true } = {}) {
     const [rx, ry, rw, rh] = rect;
     const T = new DOMMatrix().translate(rx + rw / 2, ry + rh / 2);
     if (geo) {
@@ -96,7 +96,7 @@ const loadImg = (name) => (images[name] ||= new Promise((res) => { const im = ne
     T.scaleSelf(rw / 1920, rh / 1200).translateSelf(-960, -600);
     if (paint) {
       ctx.save();
-      ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+      if (box) { ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip(); }
       if (clipTo) { ctx.beginPath(); clipTo.forEach((poly) => { poly.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.closePath(); }); ctx.clip(); }
       ctx.setTransform(T);
       ctx.drawImage(im, 0, 0, 1920, 1200);
@@ -119,6 +119,25 @@ const loadImg = (name) => (images[name] ||= new Promise((res) => { const im = ne
     }
     ctx.restore();
   };
+  // Colour jitter on the pixels (as the trainer's HSV augmentation does): hue rotation, saturation, brightness.
+  // Done by hand because canvas filters don't work in Safari.
+  function colour() {
+    if (st.hue === 0 && st.sat === 1 && st.val === 1) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const img = ctx.getImageData(0, 0, W, H), d = img.data;
+    const a = (st.hue * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+    // hue rotation in YIQ, then saturation about the luma, then brightness
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const y = 0.299 * r + 0.587 * g + 0.114 * b;
+      let I = 0.596 * r - 0.274 * g - 0.322 * b, Q = 0.211 * r - 0.523 * g + 0.312 * b;
+      [I, Q] = [(I * c - Q * s) * st.sat, (I * s + Q * c) * st.sat];
+      d[i] = (y + 0.956 * I + 0.621 * Q) * st.val;
+      d[i + 1] = (y - 0.272 * I - 0.647 * Q) * st.val;
+      d[i + 2] = (y - 1.106 * I + 1.703 * Q) * st.val;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
   // A stand-in "unrelated" scene: sky, floor and simple shapes that are not RoboSub props
   function unrelated() {
     ctx.fillStyle = '#d8cfc0'; ctx.fillRect(0, 0, W, H);
@@ -141,15 +160,13 @@ const loadImg = (name) => (images[name] ||= new Promise((res) => { const im = ne
     rotNote.textContent = locked ? ' locked: slalom is never rotated' : '';
     if (locked && st.rot !== 0) { st.rot = 0; rot.reset(); }
     rng = st.seed * 7919;
-    const filter = `hue-rotate(${st.hue}deg) saturate(${st.sat}) brightness(${st.val})`;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = 'rgb(114,114,114)'; // the trainer pads with grey
     ctx.fillRect(0, 0, W, H);
-    ctx.filter = filter;
     let polys = [], used = [x.name];
     if (st.mode === 'single') {
       polys = drawSample(await loadImg(x.name), x, [0, 0, W, H]);
-      ctx.filter = 'none';
+      colour();
       strokePolys(polys, [0, 0, W, H]);
     } else if (st.mode === 'mosaic') {
       // Ultralytics' mosaic: four images around a random centre point
@@ -170,20 +187,19 @@ const loadImg = (name) => (images[name] ||= new Promise((res) => { const im = ne
         ctx.restore();
         all.push([p, rects[i]]);
       }
-      ctx.filter = 'none';
+      colour();
       all.forEach(([p, r]) => strokePolys(p, r));
       polys = all.flatMap(([p]) => p);
     } else {
-      ctx.filter = 'none';
       unrelated();
-      ctx.filter = filter;
       const im = await loadImg(x.name);
       // paste the props, smaller, somewhere random
       const sc = 0.45 + 0.35 * rand();
       const rect = [rand() * W * (1 - sc), rand() * H * (1 - sc), W * sc, H * sc];
       const T0 = drawSample(im, x, rect, { geo: true, paint: false });
-      drawSample(im, x, rect, { geo: true, clipTo: T0.map(([, p]) => p) });
-      ctx.filter = 'none';
+      // clip only to the masks (not the paste box), so a zoomed paste and its labels stay together
+      drawSample(im, x, rect, { geo: true, clipTo: T0.map(([, p]) => p), box: false });
+      colour();
       strokePolys(T0, [0, 0, W, H]);
       polys = T0;
     }

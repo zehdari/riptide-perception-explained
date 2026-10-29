@@ -54,13 +54,18 @@ changes = [(t, [s.strip() for s in tg.split(',') if s.strip()]) for t, tg, lock 
 pairs = []; j = 0
 for w, name in resets:
     while j < len(changes) and name not in changes[j][1]: j += 1
-    if j < len(changes): pairs.append(w - changes[j][0])
-# the sim clock runs on the wall clock's epoch: start from t0, refine with the close matches only
-close = [p for p in pairs if abs(p - d['t0']) < 5]
-off = float(np.median(close)) if close else d['t0']
-print('log offset - t0', off - d['t0'], 'from', len(close), 'of', len(pairs), 'matches, residuals', [round(p - off, 2) for p in close])
-log = [[round(w - off, 2), lvl, msg] for w, lvl, msg in d.get('log_wall', []) if lvl != 'TREE']
-tree_log = [[round(w - off, 2), msg] for w, lvl, msg in d.get('log_wall', []) if lvl == 'TREE']
+    if j < len(changes): pairs.append((w, changes[j][0]))
+# Log stamps are wall time; mission time is sim time. Fit mission = a * wall + b (a = the real-time factor),
+# then refit on the matches within 2 s so a mismatched reset can't skew it.
+W = np.array([p[0] for p in pairs]); M = np.array([p[1] for p in pairs])
+A = np.polyfit(W, M, 1) if len(pairs) > 1 else np.array([1.0, -d['t0']])
+for _ in range(3):
+    ok = np.abs(np.polyval(A, W) - M) < 2.0
+    if ok.sum() >= 2: A = np.polyfit(W[ok], M[ok], 1)
+print('log -> mission time: rate %.4f, residuals' % A[0], np.round(np.polyval(A, W) - M, 2).tolist())
+tmap = lambda w: float(np.polyval(A, w))
+log = [[round(tmap(w), 2), lvl, msg] for w, lvl, msg in d.get('log_wall', []) if lvl != 'TREE']
+tree_log = [[round(tmap(w), 2), msg] for w, lvl, msg in d.get('log_wall', []) if lvl == 'TREE']
 
 # phases: runs of the primary target's task
 def task_of(name):
