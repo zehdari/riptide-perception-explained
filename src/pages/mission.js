@@ -21,7 +21,7 @@ const phaseBands = (phases) => phases.map(([s, e, name], i) => ({ x0: s, x1: e, 
 {
   const canvas = document.getElementById('replay-canvas');
   const play = document.getElementById('play'), scrub = document.getElementById('scrub'), out = document.getElementById('replay-t');
-  let run = 'shifted', t = 0, playing = false, last = 0;
+  let run = 'exact', t = 0, playing = false, last = 0;
   let view = new CourseView(canvas, heroes[run], { box: heroes.shifted.box, insets: [10, 10, 10, 10] });
   const cardImg = document.getElementById('card-img'), cardText = document.getElementById('card-text'), cardTree = document.getElementById('card-tree');
   let shown = null;
@@ -76,8 +76,8 @@ const phaseBands = (phases) => phases.map(([s, e, name], i) => ({ x0: s, x1: e, 
     setRun(b.dataset.run);
   }));
   scrub.max = heroes[run].duration;
-  // Start on the torpedo, where the moved course is most interesting
-  const torp = heroes.shifted.phases.find((p) => p[2] === 'Torpedo');
+  // Start on the torpedo
+  const torp = heroes[run].phases.find((p) => p[2] === 'Torpedo');
   t = torp ? torp[0] + 30 : 0;
   buildPhases();
   draw();

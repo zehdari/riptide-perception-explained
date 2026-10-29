@@ -17,7 +17,8 @@
   <article>
     <aside class="short"><span class="label">The short version</span><ul>
       <li>Talos's full software stack ran the competition tree in Nereus twice: once on the course its map describes, once with the course moved 72 cm and the torpedo board another 1.27 m.</li>
-      <li>Seeing the slalom put the whole map in the right place, exactly as intended.</li>
+      <li>On the exact course everything works: each prop is confirmed where it is, the table is fit to its two baskets, and every task runs. That run is the video on the overview page.</li>
+      <li>On the moved course, seeing the slalom put the whole map in the right place, exactly as intended.</li>
       <li>The torpedo was then explained partly as odometry drift instead of being written off, and that pulled every prop not yet seen back off the truth.</li>
       <li>That in turn hid one of the table's baskets: the down camera was pointed at the wrong spot, the basket only appeared 2–3 frames at a time, and mapping needs 4 that agree. No basket, no table fit.</li>
       <li>Both runs still finished the tree. Every task fails soft and moves on, which is why the failures are only visible in the data.</li>
@@ -36,11 +37,11 @@
 
     <figure class="fig">
       <div class="panel flush replay-panel">
-        <canvas id="replay-canvas" aria-label="Top-down replay of the moved-course run"></canvas>
+        <canvas id="replay-canvas" aria-label="Top-down replay of both runs"></canvas>
         <div class="replay-bar">
           <button class="btn primary" id="play">Play</button>
           <input type="range" id="scrub" min="0" max="1" step="0.1" value="0" aria-label="Mission time">
-          <span class="seg" id="run-pick" role="group" aria-label="Run"><button data-run="shifted" aria-pressed="true">Moved course</button><button data-run="exact">Exact course</button></span>
+          <span class="seg" id="run-pick" role="group" aria-label="Run"><button data-run="exact" aria-pressed="true">Exact course</button><button data-run="shifted">Moved course</button></span>
           <output id="replay-t">0:00</output>
         </div>
         <div class="replay-phases" id="phase-jump" aria-label="Jump to a task"></div>
@@ -74,7 +75,7 @@
       <p>In short: because the map was off, the down camera kept looking at the wrong spot for the warning basket. It only ever caught the basket for two or three frames at a time, and mapping won't start tracking a new target until four detections agree within four seconds. So the basket never got an estimate, and the table was never fit to its baskets.</p>
       <p>The table task (Chapter 9) searches for the two baskets with <code>DownwardSearchMpc</code>: hover the down camera 1.5 m over the basket's <em>current estimate</em>, follow it while it is in view, otherwise spiral out around the estimate, for up to 60 s each. The helmet basket went fine: found at 3:39, its error at 0.00023, under the 0.0005 it needed (about 1.2 cm σ). Then the warning basket.</p>
       <p>Its estimate came from the map: the prior position on the table, carried by the table's frame, which hangs off the offset the torpedo had just pulled 60 cm the wrong way. Mapping had the warning basket 69 cm from where it really was. The tree flew the camera over that spot and spiralled. Every 14 s the spiral swept the edge of the camera's view across the real basket: the tree logged <code>warning in view: following the detection</code>, the detector reported it two or three times, and then it was gone again, because "following" means re-aiming at <code>warning_frame</code>, which had not moved.</p>
-      <p>And it couldn't move. A target that has just been reset holds its first detections until 4 agree within 0.3 m over the last 4 s (acquisition by agreement, Chapter 7). Two or three every 14 s never makes four, so every burst aged out unused, the estimate stayed at the prior, the published covariance stayed at the unconfirmed 1.73, and after 60 s the search gave up. The tree's one-second check that both baskets are converged failed, it logged <code>helmet,warning, not both converged below 0.0005: the table keeps its prior</code>, and <code>center_table_on_baskets</code> never ran. On the exact course the same task found both baskets and fit the table: <code>Moved table by (-0.058, 0.035, -0.001) in map to fit the baskets, yawed table 1.0 deg</code>.</p>
+      <p>And it couldn't move. A target that has just been reset holds its first detections until 4 agree within 0.3 m over the last 4 s (acquisition by agreement, Chapter 7). Two or three every 14 s never makes four, so every burst aged out unused, the estimate stayed at the prior, the published covariance stayed at the unconfirmed 1.73, and after 60 s the search gave up. The tree's one-second check that both baskets are converged failed, it logged <code>helmet,warning, not both converged below 0.0005: the table keeps its prior</code>, and <code>center_table_on_baskets</code> never ran. On the exact course the same task found both baskets and fit the table: <code>Moved table by (-0.036, 0.033, -0.000) in map to fit the baskets, yawed table 0.3 deg</code>.</p>
     </div>
     <figure class="fig">
       <div class="panel"><div id="warning-chart"></div></div>
@@ -90,7 +91,7 @@
 
     <div class="prose">
       <h2 id="errors">Every prop against the truth</h2>
-      <p>On the moved course every prior starts 72 cm off (the torpedo 1.58 m). The chart shows each prop's error through the run: the slalom and torpedo drop when they are confirmed, and the unseen props move with the offset, first toward the truth, then, after the torpedo, away from it again. On the exact course the errors stay at the few centimetres the detector's reference point differs from the simulator's: the slalom ends 6 cm off, the torpedo 15 cm. The table under it compares the two runs at the end of the mission.</p>
+      <p>On the moved course every prior starts 72 cm off (the torpedo 1.58 m). The chart shows each prop's error through the run: the slalom and torpedo drop when they are confirmed, and the unseen props move with the offset, first toward the truth, then, after the torpedo, away from it again. On the exact course the errors stay at the few centimetres the detector's reference point differs from the simulator's: the slalom ends 6 cm off, the torpedo 12 cm. The table under it compares the two runs at the end of the mission.</p>
     </div>
     <figure class="fig">
       <div class="panel">

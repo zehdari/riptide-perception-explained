@@ -89,23 +89,32 @@ function seg(host, options, value, onPick) {
   draw();
 }
 
-// ---------- distortion, applied to a rectified Nereus frame ----------
+// ---------- distortion: a rectified frame run back through the lens model ----------
+// The ZED publishes rectified images: the SDK has already undistorted the raw image with the calibration and resampled
+// it to the rectified intrinsics (cv2.stereoRectify's P), with zero distortion. Nereus renders exactly that. So to show
+// the raw image the sensor records, each raw pixel is undistorted with the RAW intrinsics and D, then looked up in the
+// rectified frame with the RECTIFIED intrinsics. Applying D to the rectified image directly would distort it a second time.
 {
   const canvas = document.getElementById('dist-canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const note = document.getElementById('dist-note');
-  const W = 960, H = 600;
-  // Talos ffc intrinsics, scaled to the half-size frame
-  const fx = 1701.5 / 2, fy = 1702.4 / 2, cx = 935.2 / 2, cy = 579.4 / 2;
-  const PRESETS = {
-    none: [0, 0, 0, 0, 0],
-    ffc: [0.268, 0.0605, 0, 0, -1.036],
-    dfc: [0.2585, -0.238, -0.0016, -0.00086, 0],
+  const W = 960, H = 600, S = 0.5; // half-size frames
+  // raw lens intrinsics + distortion from the calibration files, and the rectified intrinsics Nereus renders with
+  const CAMS = {
+    ffc: { raw: [1701.5, 1702.4, 935.2, 579.4], rect: [1863.934, 1863.934, 955.847, 584.796], D: [0.268, 0.0605, 0, 0, -1.036], frame: 'torpedo_near_0' },
+    dfc: { raw: [1695.2, 1669.1, 948.0, 616.1], rect: [1857.539, 1857.539, 974.883, 604.222], D: [0.2585, -0.238, -0.0016, -0.00086, 0], frame: 'f0013_dfc' },
   };
-  let D = PRESETS.ffc.slice(), gain = 1, src = null;
+  let cam = 'ffc', lens = 'ffc', view = 'raw', gain = 1, D = CAMS.ffc.D.slice();
+  const srcs = {};
   const ctl = document.getElementById('dist-controls');
-  seg(ctl, [['none', 'None'], ['ffc', 'Talos ffc'], ['dfc', 'Talos dfc']], 'ffc', (k) => { D = PRESETS[k].slice(); sync(); draw(); });
-  seg(ctl, [[1, '×1'], [4, '×4']], 1, (g) => { gain = g; draw(); });
+  seg(ctl, [['raw', 'Raw, from the sensor'], ['rect', 'Rectified, what the detector gets']], 'raw', (v) => { view = v; draw(); });
+  seg(ctl, [['none', 'Ideal lens'], ['ffc', 'Talos ffc'], ['dfc', 'Talos dfc']], 'ffc', (k) => {
+    lens = k;
+    if (k !== 'none') cam = k;
+    D = k === 'none' ? [0, 0, 0, 0, 0] : CAMS[k].D.slice();
+    sync(); load(); draw();
+  });
+  seg(ctl, [[1, '×1'], [3, '×3']], 1, (g) => { gain = g; draw(); });
   const sl = [
     ['k₁', -0.6, 0.6, 0.001], ['k₂', -0.6, 0.6, 0.001], ['p₁', -0.02, 0.02, 0.0001], ['p₂', -0.02, 0.02, 0.0001], ['k₃', -1.5, 1.5, 0.001],
   ].map(([name, a, b, st], i) => slider(ctl, name, a, b, st, D[i], (v) => v.toFixed(i === 2 || i === 3 ? 4 : 3), (v) => { D[i] = v; draw(); }));
@@ -115,64 +124,92 @@ function seg(host, options, value, onPick) {
     const r2 = x * x + y * y, rad = 1 + k1 * r2 + k2 * r2 * r2 + k3 * r2 * r2 * r2;
     return [x * rad + 2 * p1 * x * y + p2 * (r2 + 2 * x * x), y * rad + p1 * (r2 + 2 * y * y) + 2 * p2 * x * y];
   };
+  const undistort = (xd, yd, k) => {
+    let x = xd, y = yd;
+    for (let it = 0; it < 12; it++) { const [dx, dy] = distort(x, y, k); x += xd - dx; y += yd - dy; }
+    return [x, y];
+  };
+  const Ks = () => {
+    const c = CAMS[cam];
+    const rect = c.rect.map((v) => v * S);
+    // an ideal lens has no separate raw intrinsics: raw and rectified are the same image
+    const raw = lens === 'none' ? rect : c.raw.map((v) => v * S);
+    return { raw, rect };
+  };
+  function load() {
+    const name = CAMS[cam].frame;
+    if (srcs[name]) return;
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0, W, H);
+      srcs[name] = g.getImageData(0, 0, W, H);
+      draw();
+    };
+    img.src = `${BASE}data/frames/${name}.webp`;
+  }
   let pending = false;
   function draw() {
+    const src = srcs[CAMS[cam].frame];
     if (!src || pending) return;
     pending = true;
     requestAnimationFrame(() => {
       pending = false;
       const k = D.map((v) => v * gain);
-      const out = ctx.createImageData(W, H), o = out.data, si = src.data;
-      for (let v = 0; v < H; v++) {
-        for (let u = 0; u < W; u++) {
-          // raw pixel -> its undistorted (pinhole) position, by fixed-point iteration
-          const xd = (u - cx) / fx, yd = (v - cy) / fy;
-          let x = xd, y = yd;
-          for (let it = 0; it < 6; it++) {
-            const [dx, dy] = distort(x, y, k);
-            x += xd - dx; y += yd - dy;
+      const { raw, rect } = Ks();
+      const [fx, fy, cx, cy] = raw, [rfx, rfy, rcx, rcy] = rect;
+      if (view === 'rect') {
+        ctx.putImageData(src, 0, 0);
+      } else {
+        const out = ctx.createImageData(W, H), o = out.data, si = src.data;
+        for (let v = 0; v < H; v++) {
+          for (let u = 0; u < W; u++) {
+            // raw pixel -> where that ray lands in the rectified image
+            const [x, y] = undistort((u - cx) / fx, (v - cy) / fy, k);
+            const su = Math.round(rfx * x + rcx), sv = Math.round(rfy * y + rcy);
+            const j = (v * W + u) * 4;
+            if (su >= 0 && su < W && sv >= 0 && sv < H) {
+              const i = (sv * W + su) * 4;
+              o[j] = si[i]; o[j + 1] = si[i + 1]; o[j + 2] = si[i + 2]; o[j + 3] = 255;
+            } else { o[j] = 15; o[j + 1] = 38; o[j + 2] = 51; o[j + 3] = 255; }
           }
-          const su = Math.round(fx * x + cx), sv = Math.round(fy * y + cy);
-          const j = (v * W + u) * 4;
-          if (su >= 0 && su < W && sv >= 0 && sv < H) {
-            const i = (sv * W + su) * 4;
-            o[j] = si[i]; o[j + 1] = si[i + 1]; o[j + 2] = si[i + 2]; o[j + 3] = 255;
-          } else { o[j] = 15; o[j + 1] = 38; o[j + 2] = 51; o[j + 3] = 255; }
         }
+        ctx.putImageData(out, 0, 0);
       }
-      ctx.putImageData(out, 0, 0);
-      // a straight grid in the scene, as the lens draws it
+      // a grid that is straight in the scene, drawn where this view puts it
       ctx.strokeStyle = 'rgba(255,255,255,0.75)';
       ctx.lineWidth = 1.2;
-      const lines = [];
+      const toPx = view === 'rect'
+        ? (x, y) => [rfx * x + rcx, rfy * y + rcy]
+        : (x, y) => { const [a, b] = distort(x, y, k); return [fx * a + cx, fy * b + cy]; };
       for (let i = 0; i <= 12; i++) {
-        const X = ((i / 12) * W - cx) / fx;
-        lines.push(Array.from({ length: 41 }, (_, j) => [X, ((j / 40) * H - cy) / fy]));
-      }
-      for (let i = 0; i <= 8; i++) {
-        const Y = ((i / 8) * H - cy) / fy;
-        lines.push(Array.from({ length: 61 }, (_, j) => [((j / 60) * W - cx) / fx, Y]));
-      }
-      for (const pts of lines) {
+        const X = ((i / 12) * W - rcx) / rfx;
         ctx.beginPath();
-        pts.forEach(([x, y], i) => { const [a, b] = distort(x, y, k); const P = [fx * a + cx, fy * b + cy]; i ? ctx.lineTo(...P) : ctx.moveTo(...P); });
+        for (let j = 0; j <= 40; j++) { const P = toPx(X, ((j / 40) * H - rcy) / rfy); j ? ctx.lineTo(...P) : ctx.moveTo(...P); }
         ctx.stroke();
       }
-      const [a, b] = distort((0 - 935.2) / 1701.5, (0 - 579.4) / 1702.4, k);
-      const du = 1701.5 * a + 935.2, dv = 1702.4 * b + 579.4;
-      note.innerHTML = `The scene point that should be at the top-left corner pixel (0, 0) lands at <b>(${du.toFixed(0)}, ${dv.toFixed(0)})</b>, <b>${Math.hypot(du, dv).toFixed(0)} px</b> away${Math.hypot(du, dv) > 1 ? (du < 0 ? ', outside the sensor: pincushion' : ', inside: barrel') : ''}.`;
+      for (let i = 0; i <= 8; i++) {
+        const Y = ((i / 8) * H - rcy) / rfy;
+        ctx.beginPath();
+        for (let j = 0; j <= 60; j++) { const P = toPx(((j / 60) * W - rcx) / rfx, Y); j ? ctx.lineTo(...P) : ctx.moveTo(...P); }
+        ctx.stroke();
+      }
+      if (view === 'rect') {
+        note.innerHTML = 'The rectified image: lines that are straight in the pool are straight here. This is what the ZED publishes and what Nereus renders, with the rectified focal length (here f<sub>x</sub> = ' + (rfx / S).toFixed(0) + ' px) and zero distortion.';
+      } else if (lens === 'none' && k.every((v) => v === 0)) {
+        note.innerHTML = 'An ideal lens: the raw image is already a pinhole image, so rectification has nothing to undo.';
+      } else {
+        // where the rectified image's corner ray lands on the raw sensor
+        const [a, b] = distort((0 - rcx) / rfx, (0 - rcy) / rfy, k);
+        const du = (fx * a + cx) / S, dv = (fy * b + cy) / S;
+        const out = du < 0 || dv < 0;
+        note.innerHTML = `Raw sensor image, before the SDK rectifies it. The ray through the rectified image's top-left corner lands at raw pixel <b>(${du.toFixed(0)}, ${dv.toFixed(0)})</b>${out ? ', off the sensor: the corners of the rectified image are cropped from a wider raw view' : ''}. Dark regions are raw pixels the rectified frame doesn't cover.`;
+      }
     });
   }
-  const img = new Image();
-  img.onload = () => {
-    const c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    const g = c.getContext('2d');
-    g.drawImage(img, 0, 0, W, H);
-    src = g.getImageData(0, 0, W, H);
-    draw();
-  };
-  img.src = `${BASE}data/frames/torpedo_near_0.webp`;
+  load();
 }
 
 // ---------- refraction at a flat port ----------

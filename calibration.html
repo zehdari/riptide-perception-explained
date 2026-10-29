@@ -50,7 +50,7 @@
         <canvas class="fig-canvas" id="dist-canvas" width="960" height="600"></canvas>
         <div class="frame-note" id="dist-note"></div>
       </div>
-      <figcaption><b>What the lens does to a rectified frame.</b> A Nereus forward-camera frame (a perfect pinhole image) with a straight grid over it, warped through the distortion model: this is roughly what the raw sensor sees before the ZED SDK undoes it. The presets are the coefficients from Talos's underwater calibrations. <em>×4</em> exaggerates them so the shape is easy to see. The readout is how far the corner pixel moves.</figcaption>
+      <figcaption><b>Raw and rectified.</b> The ZED SDK rectifies every frame before it is published: it undistorts the raw image with the calibration and resamples it to new, rectified intrinsics with zero distortion. Nereus renders that rectified image directly. <em>Rectified</em> shows it with a grid that is straight in the pool. <em>Raw</em> runs the calibration backwards (raw intrinsics and distortion coefficients, then the rectified intrinsics) to show what the sensor actually records through the port. The presets are Talos's underwater calibrations; <em>Ideal lens</em> has no distortion, so raw and rectified are the same. <em>×3</em> exaggerates the coefficients.</figcaption>
     </figure>
 
     <div class="prose">

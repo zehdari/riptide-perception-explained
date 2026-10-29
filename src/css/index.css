@@ -34,3 +34,17 @@
   .replay { flex-basis: 100%; }
 }
 .part-label { font-family: var(--sans); font-size: 0.78rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 1.4rem 0 0.4rem; }
+
+/* the video hero */
+.video-hero { max-width: 72rem; margin: 0 auto; padding: 3.2rem 0 0.5rem; }
+.vh-copy { max-width: 44rem; }
+.vh-copy .sub { font-family: var(--sans); font-size: clamp(1.25rem, 2.2vw, 1.7rem); font-weight: 650; font-stretch: 112%; line-height: 1.2; margin: 0.6rem 0 0; }
+.vh-copy p:not(.sub) { font-size: 1.15rem; line-height: 1.5; color: var(--ink-2); margin-top: 1rem; }
+.vh-video { margin: 1.6rem 0 0; }
+.vh-video video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #0f2633; border-radius: 10px; }
+.vh-chapters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.7rem; }
+.vh-chapters button { font-family: var(--sans); font-size: 0.84rem; border: 1px solid var(--rule); background: var(--paper); color: var(--ink-2); border-radius: 999px; padding: 0.3rem 0.8rem; cursor: pointer; }
+.vh-chapters button:hover { border-color: var(--ink-2); color: var(--ink); }
+.vh-chapters button[aria-pressed='true'] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.vh-video figcaption { max-width: 40rem; }
+@media (max-width: 900px) { .video-hero { padding-top: 4rem; } }
