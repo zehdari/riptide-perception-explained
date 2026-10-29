@@ -12,54 +12,56 @@
   <header class="page-head">
     <div class="kicker">Vision · Chapter 4</div>
     <h1>From a mask to a pose</h1>
-    <p class="lede">A mask says which pixels are the object. The depth image says how far away each pixel is. Put together, they give a few hundred 3D points on the object's surface, and a plane through them gives its position and the way it faces.</p>
+    <p class="lede">The mask says which pixels are the object; depth says how far each is. Together they give a few hundred 3D points, and a plane through them gives position and facing.</p>
   </header>
   <aside class="short"><span class="label">The short version</span><ul>
-    <li>Take a grid of pixels inside the object's mask, and use the depth image and the camera's intrinsics (Chapter 1) to turn each into a 3D point.</li>
-    <li>Throw out points whose depth is far from the rest: mask edges often "bleed" onto the pool wall behind the object, and those points are metres away.</li>
-    <li>Fit a plane through what is left. Its <span class="term">normal</span>, the direction straight out of the surface, says which way the object faces; mapping turns it into the object's heading.</li>
-    <li>The position is the centre of the object's box, pushed out to the plane's depth.</li>
-    <li>The figure below does all of this on a real frame in your browser: switch the filters off and watch the plane tilt.</li>
+    <li>Sample a grid of pixels inside the mask and turn each into a 3D point using depth and the camera's intrinsics (Chapter 1).</li>
+    <li>Drop points whose depth is far from the rest: mask edges often "bleed" onto the wall behind.</li>
+    <li>Fit a plane. Its <span class="term">normal</span> (the direction straight out of the surface) says which way the object faces.</li>
+    <li>The position is the box centre, pushed out to the points' mean depth.</li>
   </ul></aside>
   <article>
     <div class="prose">
-      <p>This is the one step of the detector that does real geometry, and it is worth understanding properly: most errors in where a prop ends up on the map start here.</p>
-      <p>Almost every RoboSub prop Talos looks for is flat, or has a flat face that matters: a printed symbol on a board, the side of a basket, the top of a cylinder on the table. The detector's generic path assumes exactly that. For each box it samples the masked pixels, turns them into 3D points with the depth image, throws away the points that don't belong, and fits a plane (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L312-L369"><code>detection.py</code>, "Shared surface fitting"</a>; the filtering is in <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/pointcloud.py#L48-L124"><code>pointcloud.py</code></a>). The figure below runs each step on a real frame, in your browser, with the same arithmetic.</p>
+      <p>Most errors in where a prop ends up on the map start here. Nearly every RoboSub prop has a flat face that matters, so the detector samples the mask, makes 3D points, filters them and fits a plane (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L312-L369"><code>detection.py</code></a>, filtering in <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/pointcloud.py#L48-L124"><code>pointcloud.py</code></a>). The figure below runs each step on a real frame.</p>
 
       <h2 id="sample">Sampling the mask</h2>
-      <p>Before any box is processed, every mask in the frame is painted into one full-frame mask image. For each box the detector takes the part of that image inside the box (shrunk by <code>class_detect_shrink</code> on each side, which Talos sets to 0) and keeps a regular grid of its pixels: every <code>grid_step</code> = 8 px across and down, the ones that are inside a mask. A box 200 px on a side has 625 grid pixels; the masked ones are typically half to three quarters of those. If more than <code>max_sample_points</code> = 500 survive, 500 are kept, evenly spaced through the list (<code>np.linspace</code> over the indices), so a box close to the camera costs the same as one at mid-range.</p>
-      <p>Because the mask image is the union of every mask in the frame, a box samples any masked pixel inside it, its own object's or a neighbour's. In the Nereus frames here no box overlaps another object's mask, so it never happens; two objects overlapping in the image, at different depths, would mix their samples, and the depth gate below is what would separate them.</p>
+      <p>All masks in the frame are painted into one full-frame image. Inside each box (shrunk by <code>class_detect_shrink</code>, 0 on Talos), the detector keeps every <code>grid_step</code> = 8 px pixel that is masked. A 200 px box has 625 grid pixels, about half to three quarters masked. Above <code>max_sample_points</code> = 500, 500 evenly spaced ones are kept, so a close box costs the same as a far one.</p>
+      <p>Because the mask image is a union, a box can pick up a neighbour's mask pixels. It never happens in these Nereus frames; if it did, the depth gate would separate them.</p>
 
       <h2 id="backproject">Back-projection</h2>
-      <p>Each sampled pixel <span class="m">(u, v)</span> with a valid depth <span class="m">z</span> (not zero, NaN or infinite, which is what the ZED reports where stereo matching failed) becomes a point in the camera's optical frame by inverting the pinhole projection:</p>
+      <p>Each sampled pixel <span class="m">(u, v)</span> with a valid depth <span class="m">z</span> (not zero, NaN or infinite, which the ZED reports where stereo failed) inverts the pinhole projection:</p>
       <div class="M">x = \frac{(u - c_x)\, z}{f_x}, \qquad y = \frac{(v - c_y)\, z}{f_y}, \qquad \bp = (x,\, y,\, z)</div>
       <p class="eq-note"><span class="m">f_x, f_y</span>: focal lengths in pixels, <span class="m">(c_x, c_y)</span>: the principal point, both from <code>camera_info</code>. Nereus's forward camera: 1864 px and (956, 585).</p>
-      <p>The depth is the <em>z</em> coordinate, so no normalisation by ray length is needed. One pixel at 2 m spans 2 / 1864 ≈ 1.1 mm, so the 8 px grid puts samples about 9 mm apart on an object two metres away.</p>
+      <p>At 2 m one pixel spans about 1.1 mm, so the 8 px grid puts samples about 9 mm apart.</p>
 
       <h2 id="gate">The depth gate</h2>
-      <p>A mask is never exactly the object. Its outline is a few pixels loose, and a stereo camera blurs depth across the edge of an object: the pixels just outside a board read somewhere between the board and the wall behind it (stereo practitioners call them flying pixels). A sample on such a pixel lands metres behind the object, and a plane fitted with it tilts toward the background. The first filter removes them by depth alone (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/pointcloud.py#L159-L183"><code>_depth_filter</code></a>):</p>
+      <p>Masks are a few pixels loose, and stereo blurs depth across edges: pixels just outside a board read somewhere between the board and the wall (<em>flying pixels</em>). Those points tilt the plane, so the first filter removes them by depth alone (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/pointcloud.py#L159-L183"><code>_depth_filter</code></a>):</p>
       <div class="M">m = \operatorname{median}(z_i), \qquad s = \max\!\big(1.4826\,\operatorname{median}|z_i - m|,\; 0.05\ \text{m}\big), \qquad \text{keep } |z_i - m| \le 3\,s</div>
-      <p>The median and the median absolute deviation (MAD) are robust: a third of the points could sit on the wall and neither would move much. 1.4826 scales the MAD to the standard deviation it equals for Gaussian data, so <code>depth_mad_scale</code> = 3 is a three-sigma gate. The 5 cm floor (<code>depth_min_spread</code>) matters for a board seen head-on: all its points are at almost the same depth, the MAD is millimetres, and without the floor a gate that tight would cut real points on a slightly tilted board. With the floor, nothing within 15 cm of the median depth is ever removed.</p>
-      <p>The gate looks only at <em>z</em>, so it adapts to distance automatically and costs one sort. It is two-sided: a stray point in front of the object goes too.</p>
+      <ul>
+        <li>Median and MAD (median absolute deviation) barely move even if a third of the points are on the wall.</li>
+        <li>1.4826 scales MAD to a standard deviation, so <code>depth_mad_scale</code> = 3 is a three-sigma gate.</li>
+        <li>The 5 cm floor (<code>depth_min_spread</code>) protects a head-on board: nothing within 15 cm of the median is removed.</li>
+        <li>It is two-sided: stray points in front go too.</li>
+      </ul>
 
       <h2 id="outliers">Two outlier passes</h2>
-      <p>The survivors then go through two neighbourhood filters (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/pointcloud.py#L185-L201"><code>_outlier_indices</code></a>, with the masks from <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L140-L163"><code>geometry.py</code></a>):</p>
+      <p>Survivors then go through two neighbourhood filters (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/pointcloud.py#L185-L201"><code>_outlier_indices</code></a>):</p>
       <ul>
-        <li><strong>Radius pass.</strong> Keep a point if more than <span class="m">k = \min(10,\, 0.8\,n)</span> points (itself included) lie within 1 m of it.</li>
-        <li><strong>Statistical pass</strong>, on the radius survivors. For each point, the mean distance to its <span class="m">k</span> nearest neighbours; drop the points whose mean distance is more than one standard deviation above the average.</li>
+        <li><strong>Radius pass.</strong> Keep a point if more than <span class="m">k = \min(10,\, 0.8\,n)</span> points (itself included) lie within 1 m.</li>
+        <li><strong>Statistical pass.</strong> Drop points whose mean distance to their <span class="m">k</span> nearest neighbours is more than one standard deviation above average.</li>
       </ul>
-      <p>Both are standard point-cloud filters, and both behave in ways worth knowing on a patch this small. A 1 m radius is larger than almost every prop, so the radius pass only ever removes a point more than a metre from nearly all the others, which the depth gate has usually removed already. The statistical pass does the opposite: its threshold is relative, so on a perfectly clean patch it still removes the points with the sparsest neighbourhoods, the ones on the rim of the grid. In the Nereus frames on this page it drops a median of 13 % of a patch (up to 21 %), almost all of it along the outline. That costs a little information at the edges but never tilts the plane. One far-off point that survives the gate, though, inflates the standard deviation so much that the statistical pass removes only that point and keeps the rim: the first pass makes the second one predictable.</p>
+      <p>1 m is bigger than most props, so the radius pass rarely removes anything the gate missed. The statistical pass always trims the sparse rim, a median of 13 % of a patch (up to 21 %) in these frames, without tilting the plane.</p>
 
       <h2 id="plane">The plane fit</h2>
-      <p>The kept points (at least <code>min_points</code> = 5) define the surface. <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L36-L48"><code>fit_plane</code></a> is the least-squares plane by singular value decomposition: subtract the centroid, decompose, and the direction of least variance is the normal.</p>
+      <p>With at least <code>min_points</code> = 5 left, <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L36-L48"><code>fit_plane</code></a> subtracts the centroid and takes the SVD; the direction of least variance is the normal.</p>
       <div class="M">\bar\bp = \frac1n \sum_i \bp_i, \qquad \begin{bmatrix} (\bp_1 - \bar\bp)^\top \\ \vdots \\ (\bp_n - \bar\bp)^\top \end{bmatrix} = U \Sigma V^\top, \qquad \bn = V_{:,3}</div>
-      <p>The last right-singular vector minimises the sum of squared distances from the points to the plane through <span class="m">\bar\bp</span>, so this is orthogonal regression, which treats depth error and image-plane error alike. The sign of an SVD vector is arbitrary; the detector flips it to face the camera (<span class="m">n_z &lt; 0</span>, since the camera looks along +z).</p>
-      <p>The orientation published with the detection is built so that its <strong>+z axis is the normal</strong> (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L51-L58"><code>quat_from_normal_stable</code></a>). Its x and y axes come from a fixed rule (cross the normal with the camera's x axis, or with y when the normal is nearly along x), so the same normal always gives the same quaternion and there is no singularity anywhere. The roll about the normal carries no information: a plane has no "up". Mapping uses only the direction of the normal: it rotates it into the object's parent frame and takes its heading, <span class="m">\operatorname{atan2}(n_y, n_x)</span>, as the object's yaw (Chapter 7). For a board facing Talos the normal points back toward the camera, so the yaw says which way the board faces; that is what lets autonomy line up square in front of the torpedo. The overview's replay draws each detection's normal as a short line for this reason.</p>
+      <p>This minimises squared point-to-plane distance. The normal is flipped to face the camera (<span class="m">n_z &lt; 0</span>).</p>
+      <p>The published orientation has its <strong>+z axis along the normal</strong>; x and y follow a fixed rule, so there is no singularity. Mapping uses only the normal's heading, <span class="m">\operatorname{atan2}(n_y, n_x)</span>, as the object's yaw (Chapter 7). That is what lets autonomy line up square to the torpedo board.</p>
 
       <h2 id="centroid">Where the object is</h2>
-      <p>The position is not the mean of the points. It is the centre of the bounding box, back-projected at the mean depth of the points:</p>
+      <p>The position is the bounding-box centre, back-projected at the points' mean depth:</p>
       <div class="M">\mathbf c = \Big(\tfrac{(u_b - c_x)\, \bar z}{f_x},\; \tfrac{(v_b - c_y)\, \bar z}{f_y},\; \bar z\Big), \qquad (u_b, v_b) = \text{box centre}, \qquad \bar z = \bar\bp_z</div>
-      <p>The box centre is a stable image position for the object even when filtering removes points unevenly. Note that this is not where the ray through the box centre meets the fitted plane (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L20-L33"><code>ray_plane_intersection</code></a>, which the torpedo board uses). The two agree when the box centre's ray hits the plane at the patch's mean depth, which is nearly always true: the box centre and the patch's centre are close in the image. On the 37° board in the figure the difference is under half a centimetre. It grows with the tilt times the gap between the two centres, which gets large when the mask is lopsided, for example an object cut off by the edge of the image. Then the box centre is the centre of the visible part, which is a bigger error anyway, and one the mapping's acquisition rules exist to survive.</p>
+      <p>The box centre stays stable when filtering removes points unevenly. It is not quite where the centre ray meets the plane (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L20-L33"><code>ray_plane_intersection</code></a>, used for the torpedo board); on the 37° board in the figure the two differ by under half a centimetre. The gap grows for lopsided masks, such as objects cut off by the image edge.</p>
     </div>
 
     <figure class="fig">
@@ -73,13 +75,13 @@
         <div class="controls" style="margin-top:.8rem" id="pose-controls"></div>
         <div class="readout" id="pose-readout"></div>
       </div>
-      <figcaption><b>The generic path on a real frame.</b> Left: the object's box with its grid samples, coloured by what happens to them. Right: the same samples in 3D in the camera frame, the fitted plane and its normal (dashed: the normal with every step on and no bleed). Nereus renders depth exactly, so on its own the gate has almost nothing to do. <em>Edge bleed</em> gives the rim the flying pixels a real stereo camera produces (part-way to the depth behind the object). The basket starts with 32 px of it: the gate catches most of the bleed and the plane moves about 5°; switch the gate off and it tips about 40° toward the floor, and the outlier passes don't save it. <em>Grow mask</em> loosens the outline the way a less confident mask would.</figcaption>
+      <figcaption><b>The generic path on a real frame.</b> Left: grid samples coloured by fate; right: the same points in 3D with the fitted plane and normal (dashed: the ideal normal). The basket starts with 32 px of <em>edge bleed</em> (fake flying pixels): switch the gate off and the plane tips about 40°.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="output">What comes out</h2>
-      <p>Each box that survives with five or more points becomes one <code>Detection3D</code>: the class, the box's confidence, the centroid and the quaternion, all in the camera's optical frame. The detection carries no covariance; how much one of them is worth is decided downstream (Chapter 6). A box whose points don't survive publishes nothing, and that is the common failure mode: an object whose mask lies mostly on invalid depth (the edge of the image, a reflective surface, open water with nothing behind it) is seen by the network but never reaches mapping.</p>
-      <p>The same samples, after filtering, also feed the debug point cloud and the dots drawn on the annotated image, so what you see in RViz or Foxglove is exactly what the plane was fitted to.</p>
+      <p>Each box with five or more points left becomes one <code>Detection3D</code>: class, confidence, centroid and quaternion in the camera's optical frame, with no covariance (Chapter 6 decides its weight). A box whose points don't survive publishes nothing. That is the common failure: a mask mostly on invalid depth (image edge, reflective surface, open water) is seen but never mapped.</p>
+      <p>The filtered samples also feed the debug point cloud and the dots on the annotated image, so RViz and Foxglove show exactly what the plane was fitted to.</p>
     </div>
     <nav class="next" aria-label="Chapter navigation"></nav>
   </article>

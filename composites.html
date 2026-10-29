@@ -12,42 +12,41 @@
   <header class="page-head">
     <div class="kicker">Vision · Chapter 5</div>
     <h1>Props made of several pieces</h1>
-    <p class="lede">The network sees symbols, not props. A torpedo board is four symbols and four identical rings; a gate half is two signs. Some objects mapping needs can only be built once the whole frame has been seen.</p>
+    <p class="lede">The network sees symbols, not props. A torpedo board is four symbols and four identical rings; a gate half is two signs. These objects can only be built once the whole frame has been seen.</p>
   </header>
   <aside class="short"><span class="label">The short version</span><ul>
-    <li>Most classes become one detection each (Chapter 4). Three kinds wait until the whole frame has been looked at, because their pose depends on other boxes.</li>
-    <li><strong>Gate signs</strong>: two symbols on one sign (compass + hammer-and-wrench, buoy + SOS) seen together become one <code>gate_repair</code> or <code>gate_rescue</code> detection.</li>
-    <li><strong>The torpedo board</strong>: one plane is fitted through all its symbols, every symbol and ring centre is projected onto it, and the four openings are named by sorting them along the line from the fire symbol to the blood symbol, which works at any roll.</li>
-    <li><strong>The slalom</strong>: a pole is too thin for a plane, so its position is one depth sample, and only the nearest pole is reported.</li>
-    <li>The table pair (two baskets → one table) still exists in the code but is switched off; mapping fits the table to the baskets instead.</li>
+    <li><strong>Gate signs</strong>: two symbols seen together become one <code>gate_repair</code> or <code>gate_rescue</code>.</li>
+    <li><strong>Torpedo board</strong>: one plane through all its symbols; the four openings are named by sorting along the fire→blood axis, at any roll.</li>
+    <li><strong>Slalom</strong>: a pole is too thin for a plane, so its position is one depth sample; only the nearest pole is reported.</li>
+    <li>The table pair exists in code but is off; mapping fits the table to the baskets.</li>
   </ul></aside>
   <article>
     <div class="prose">
-      <p>Chapter 4's generic path makes one detection per box. Three groups of classes are held back from it and resolved together after every box in the frame has been routed (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L186-L224"><code>process</code></a>): pairs of symbols that form one prop, the torpedo board, and the slalom poles. Each produces detections under names the network never outputs, <code>gate_repair</code>, <code>torpedo</code>, <code>fire_hole_large</code>, and those are the names mapping tracks.</p>
+      <p>Three groups skip Chapter 4's one-box-one-detection path and are resolved after the whole frame is routed (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L186-L224"><code>process</code></a>). They publish names the network never outputs (<code>gate_repair</code>, <code>torpedo</code>, <code>fire_hole_large</code>), and those are what mapping tracks.</p>
 
       <h2 id="pairs">Pairs</h2>
-      <p>The 2026 gate has two halves, each marked by a sign with two symbols on it: compass and hammer-and-wrench for the "repair" side, buoy and SOS for "rescue". Autonomy needs the half, not the symbols, so the detector merges them (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L38-L47"><code>DETECTION_PAIRS</code></a>):</p>
+      <p>Each 2026 gate half has a sign with two symbols. Autonomy needs the half, so the detector merges them (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L38-L47"><code>DETECTION_PAIRS</code></a>):</p>
       <ul>
         <li><code>compass</code> + <code>hammer_and_wrench</code> → <code>gate_repair</code></li>
         <li><code>buoy</code> + <code>sos</code> → <code>gate_rescue</code></li>
-        <li><code>warning</code> + <code>helmet</code> → <code>table</code>, only after <code>set_table_pair_enabled</code>(true); the current tree leaves it off (below)</li>
+        <li><code>warning</code> + <code>helmet</code> → <code>table</code>, only after <code>set_table_pair_enabled</code>(true); off in the current tree</li>
       </ul>
-      <p>When both members are in the frame (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L542-L580"><code>_resolve_pairs</code>, <code>_emit_combined_pair</code></a>), each member box is sampled on its own, exactly as in Chapter 4, the samples are pooled, and one plane is fitted to all of them. The position is the centre of the <em>union</em> of the boxes, back-projected at the pooled points' mean depth, which lands between the two symbols on the sign; the confidence is the lower of the members'. Pooling helps the normal twice: there are more points, and they span a wider stretch of the sign, so a small error in depth tilts the plane less.</p>
-      <p>When only one member is visible, the pair is not formed: that box goes down the generic path under its own name (<code>sos</code>, <code>compass</code>) like any other class. Mapping has entries for those names too, so a lone symbol still says where the sign is, only under a different name. In the Nereus mission's gate frames the network found <code>sos</code> in one frame and <code>compass</code> in the next, each without its partner, at confidences just above the 0.65 threshold: the far signs are small, and a pair needs both members to clear the threshold in the same frame.</p>
+      <p>With both members in the frame, each box is sampled as in Chapter 4, the points are pooled and one plane is fitted. More points over a wider span give a steadier normal. The position is the centre of the <em>union</em> of the boxes at the pooled mean depth; the confidence is the lower member's.</p>
+      <p>A lone member goes down the generic path under its own name (<code>sos</code>, <code>compass</code>), which mapping also knows. In the Nereus gate frames the network found <code>sos</code> and <code>compass</code> in separate frames, each just above 0.65, so no pair formed.</p>
 
       <h3 id="table">The table pair: switched off</h3>
-      <p>The code can also merge <code>warning</code> + <code>helmet</code>, the table's two baskets, into one <code>table</code> detection with a frame lying flat on the table (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L582-L618"><code>_table_pair_quat</code></a>). The current competition tree doesn't use it: <code>RepairCompMpcTree</code> calls <code>set_table_pair_enabled</code>(false) when it reaches the table, so each basket is detected on its own, and mapping fits the table to the two baskets' estimates instead (<code>mapping/center_table_on_baskets</code>, Chapter 9). That fit uses many detections of each basket, where the pair used whatever one frame happened to show. If you meet the pair in old trees, that is what it was for.</p>
+      <p><code>warning</code> + <code>helmet</code> (the table's two baskets) can merge into one flat <code>table</code> detection. <code>RepairCompMpcTree</code> turns it off at the table; mapping fits the table to many detections of each basket instead (<code>mapping/center_table_on_baskets</code>, Chapter 9).</p>
     </div>
 
     <div class="prose">
       <h2 id="torpedo">The torpedo board</h2>
-      <p>The torpedo board carries four symbols, fire, blood, an ambulance and a fire engine, and four openings: for each of fire and blood, one large and one small, near that symbol. A torpedo through the right opening scores. The network finds the openings only as <code>circle</code>, four boxes with the same class and the same look. Which one is "fire, large" is decided by geometry, in <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L397-L507"><code>process_torpedo_task</code></a>. It runs only on the forward camera (<code>torpedo_task_camera</code>), so on the downward camera fire and blood are ordinary classes, the bin vinyls.</p>
-      <p><strong>One plane for the whole board.</strong> Fire and blood are required: if neither fits, nothing is published. Each symbol that is present, fire, blood and whichever of ambulance and fire engine were seen, is sampled and filtered as in Chapter 4, and their points are pooled into one SVD plane. A single symbol at the edge of the image can give a badly tilted plane on its own (in one mission frame a fire symbol cut off by the image edge fits almost 50° off the board's normal); pooled with the others it barely matters. The plane passes through the mean of the fire and blood centroids.</p>
-      <p><strong>Every centre on the plane.</strong> The centre pixel of each symbol box and each circle box is turned into a 3D point by intersecting its camera ray with that plane:</p>
+      <p>The board has four symbols (fire, blood, ambulance, fire engine) and four openings: a large and a small one near each of fire and blood. The network sees each opening only as <code>circle</code>, so geometry names them (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L397-L507"><code>process_torpedo_task</code></a>). This runs only on the forward camera (<code>torpedo_task_camera</code>).</p>
+      <p><strong>One plane for the whole board.</strong> Fire and blood are required, or nothing is published. Every visible symbol is sampled as in Chapter 4 and pooled into one SVD plane through the mean of the fire and blood centroids. Pooling matters: a fire symbol cut off by the image edge fit almost 50° off on its own.</p>
+      <p><strong>Every centre on the plane.</strong> Each symbol and circle box centre is placed where its camera ray meets the plane:</p>
       <div class="M">\mathbf d = \frac{K^{-1}(u, v, 1)^\top}{\lVert K^{-1}(u, v, 1)^\top \rVert}, \qquad t = \frac{\bn \cdot \mathbf a}{\bn \cdot \mathbf d}, \qquad \mathbf p = t\,\mathbf d</div>
-      <p class="eq-note"><span class="m">\mathbf a</span>: the anchor point on the plane, <span class="m">\bn</span>: the board normal. The circles have no usable surface of their own (an opening's middle is open water), so this is the only way to place them.</p>
-      <p><strong>The board centre.</strong> With an in-plane basis <span class="m">(\hat u, \hat v)</span>, every projected centre gets coordinates <span class="m">(u_k, v_k)</span>; the torpedo detection is the middle of their extent, <span class="m">\big(\tfrac{\min u_k + \max u_k}{2}, \tfrac{\min v_k + \max v_k}{2}\big)</span>. With every symbol and opening in view, that is the middle of the printed pattern. With fewer, it is the middle of what was seen: in the mission's first frame of the board, from about 2 m, only fire cleared the threshold, and the torpedo detection went out at the fire symbol, 30 cm from the board's centre. Mapping's tracking (Chapter 7) treats that as one more noisy detection; it is a bias, not noise, while only part of the board is visible. Its confidence is the lower of fire's and blood's, and its orientation is the board normal's.</p>
-      <p><strong>Naming the openings.</strong> Only with fire, blood and exactly four circles in the frame. Project each opening onto the axis from the fire symbol to the blood symbol, <span class="m">s_k = (\mathbf p_k - \mathbf p_{\text{fire}}) \cdot \hat{\mathbf s}</span>, and sort: the two smallest <span class="m">s</span> are fire's openings, the two largest blood's. Within each pair, the one nearer its symbol in 3D is the large one. Sorting along the symbol axis always gives a 2–2 split, and it works with distances measured on the board in 3D, so it doesn't care how the board is rolled or where the camera is. Rules in image coordinates are fragile. Even "each opening belongs to the symbol nearest it in the image", which is right head-on and at any roll, fails once the board is turned far enough for perspective to squeeze its far side.</p>
+      <p class="eq-note"><span class="m">\mathbf a</span>: anchor point on the plane, <span class="m">\bn</span>: board normal. An opening's middle is open water, so this is the only way to place it.</p>
+      <p><strong>The board centre</strong> is the middle of the projected centres' extent in in-plane coordinates <span class="m">(u_k, v_k)</span>: <span class="m">\big(\tfrac{\min u_k + \max u_k}{2}, \tfrac{\min v_k + \max v_k}{2}\big)</span>. With only part of the board seen it is biased: in the first mission frame (about 2 m out) only fire cleared the threshold, and the detection landed 30 cm from the true centre. Confidence is the lower of fire's and blood's; orientation is the board normal.</p>
+      <p><strong>Naming the openings</strong> needs fire, blood and exactly four circles. Project each opening onto the fire→blood axis, <span class="m">s_k = (\mathbf p_k - \mathbf p_{\text{fire}}) \cdot \hat{\mathbf s}</span>, and sort: the two smallest are fire's, the two largest blood's. In each pair, the one nearer its symbol in 3D is large. Because it uses 3D distances on the board, it works at any roll and viewpoint; image-space rules break under perspective.</p>
     </div>
     <figure class="fig">
       <div class="panel">
@@ -55,10 +54,10 @@
         <svg class="diagram" id="torp-diagram" viewBox="410 160 1100 880" style="max-height:34rem" role="img" aria-label="Simulated camera view of the torpedo board with the openings named by the detector's rule"></svg>
         <div class="frame-note" id="torp-note"></div>
       </div>
-      <figcaption><b>Naming the openings, at any roll.</b> The board's layout is measured from a head-on Nereus frame; here it is placed 1.5 m in front of the forward camera and drawn as the camera would see it. The dashed line is the fire→blood axis and the ticks are each opening's <span class="m">s</span>. Roll the board, or turn it, and the names stay right. The line under the figure scores the nearest-symbol-in-the-image rule on the same view: turn the board 50° or more and, at some rolls, it splits the openings 3–1.</figcaption>
+      <figcaption><b>Naming the openings, at any roll.</b> The board, measured from a Nereus frame, 1.5 m in front of the camera; dashed line = fire→blood axis, ticks = each opening's <span class="m">s</span>. Roll or turn it: the names stay right, while the nearest-symbol-in-image rule (scored below) splits 3–1 at some rolls past 50°.</figcaption>
     </figure>
     <div class="prose">
-      <p>Each opening is published with the board's orientation and a marker sized from its box (pixels / 150, a rough metres-at-typical-range scale for RViz only). The holes' confidences are their circle boxes'. Here is what the forward camera published on frames from the mission, projected back into the image:</p>
+      <p>Each opening is published with the board's orientation and its circle box's confidence (marker size = box pixels / 150, for RViz only). What the mission published, projected back into the image:</p>
     </div>
     <figure class="fig">
       <div class="panel">
@@ -66,19 +65,18 @@
         <div id="torp-view"></div>
         <div class="frame-note" id="torp-frame-note"></div>
       </div>
-      <figcaption><b>The published board, on real frames.</b> Network boxes dashed; the published <code>torpedo</code> centre (cross) and the four named openings, re-run offline through <code>process_torpedo_task</code> and projected into the image. The oblique views are where the shared plane and the axis sort earn their keep.</figcaption>
+      <figcaption><b>The published board, on real frames.</b> Network boxes dashed; the <code>torpedo</code> centre (cross) and four named openings from <code>process_torpedo_task</code>. The oblique views show why the shared plane matters.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="slalom">The slalom</h2>
-      <p>A slalom pole is a thin vertical pipe: there is no surface to fit a plane to, and the mask is a few pixels wide. The slalom path (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L285-L298"><code>create_detection3d_message</code></a>, <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L621-L665"><code>_process_slalom</code></a>) is correspondingly simple:</p>
+      <p>A pole is a thin pipe with no surface to fit, so the slalom path is simple (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L621-L665"><code>_process_slalom</code></a>):</p>
       <ul>
-        <li>The position of each pole is one depth sample, at the box's centre pixel, back-projected. A NaN or zero depth there (the centre pixel missing the pole) drops the pole for this frame.</li>
-        <li>Of the poles in a frame, only the closest (smallest depth) is kept. <code>slalom_history_size</code> is 1 on Talos, so the "closest in history" is simply the closest this frame.</li>
-        <li>The orientation is not measured at all: it is the rotation of <code>slalom_parent_frame</code>, mapping's prior for the slalom row, looked up in TF and expressed in the camera frame, then turned −90° about y so the marker arrow lies along the row. Without that TF the node warns and publishes the placeholder orientation.</li>
-        <li>It goes out under the name set by <code>set_slalom_type</code> (default <code>slalom_front</code>). The mission trees set it to <code>slalom_parent</code>, so in practice the closest pole updates mapping's estimate of the whole slalom row, and the three poles hang off that at their config offsets.</li>
+        <li>Position: one depth sample at the box centre, back-projected. NaN or zero depth drops the pole.</li>
+        <li>Only the closest pole is kept (<code>slalom_history_size</code> = 1).</li>
+        <li>Orientation is not measured: it comes from <code>slalom_parent_frame</code> in TF (turned −90° about y), and mapping locks it to config anyway (<code>lock_orientation_to_config</code>). Only position counts.</li>
+        <li>The name comes from <code>set_slalom_type</code> (default <code>slalom_front</code>). The mission sets <code>slalom_parent</code>, so the closest pole updates the whole row.</li>
       </ul>
-      <p>Mapping locks every slalom frame's orientation to its config (<code>lock_orientation_to_config</code>), so the published orientation never reaches the estimate anyway; only the position counts.</p>
     </div>
     <figure class="fig">
       <div class="panel">

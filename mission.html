@@ -12,27 +12,24 @@
   <header class="page-head">
     <div class="kicker">Mapping · Chapter 10</div>
     <h1>One mission in Nereus</h1>
-    <p class="lede">Everything in the earlier chapters, in one run: Talos's whole software stack swimming the RoboSub 2026 course in the simulator, on a course that is not where its map says.</p>
+    <p class="lede">Every earlier chapter in one run: Talos's whole software stack swimming the RoboSub 2026 course in the simulator, on a course that is not where its map says.</p>
   </header>
   <article>
     <aside class="short"><span class="label">The short version</span><ul>
-      <li>Talos's full software stack ran the competition tree in Nereus twice: once on the course its map describes, once with the course moved 72 cm and the torpedo board another 1.27 m.</li>
-      <li>On the exact course everything works: each prop is confirmed where it is, the table is fit to its two baskets, and every task runs. That run is the video on the overview page.</li>
-      <li>On the moved course, seeing the slalom put the whole map in the right place, exactly as intended.</li>
-      <li>The torpedo was then explained partly as odometry drift instead of being written off, and that pulled every prop not yet seen back off the truth.</li>
-      <li>That in turn hid one of the table's baskets: the down camera was pointed at the wrong spot, the basket only appeared 2–3 frames at a time, and mapping needs 4 that agree. No basket, no table fit.</li>
-      <li>Both runs still finished the tree. Every task fails soft and moves on, which is why the failures are only visible in the data.</li>
+      <li>The full stack ran the competition tree in Nereus twice: on the mapped course, and with the course moved 72 cm (the torpedo another 1.27 m).</li>
+      <li>On the exact course every prop is confirmed, the table is fit and every task runs.</li>
+      <li>On the moved course the slalom fixed the map, but the torpedo was blamed on odometry drift, pulling unseen props back off the truth.</li>
+      <li>So a table basket was never found and the table never fit. Both runs still finished: tasks fail soft.</li>
     </ul></aside>
     <div class="prose">
       <h2 id="setup">The run</h2>
-      <p><a href="https://github.com/osu-uwrt/nereus">Nereus</a> simulates the pool, the props, Talos's dynamics and sensors, and renders both ZED cameras' colour and depth images. Everything else is the robot's own software, unchanged: the YOLO models and <code>tensor_detector</code>, mapping, the EKF, the <a href="https://zehdari.github.io/riptide-mpc-explained/">MPC</a>, and the competition behaviour tree <code>RepairCompMpcTree</code>, started the way the team starts it at the pool. Nothing in the stack knows where the simulator put the props.</p>
-      <p>Talos's map is <code>riptide_mapping</code>'s <code>init_data</code>: the RoboSub 2026 layout as the team measured it. The run was flown twice.</p>
+      <p><a href="https://github.com/osu-uwrt/nereus">Nereus</a> simulates the pool, props, Talos's dynamics and sensors, and renders both ZED cameras' colour and depth. Everything else is the robot's own software, unchanged: YOLO and <code>tensor_detector</code>, mapping, the EKF, the <a href="https://zehdari.github.io/riptide-mpc-explained/">MPC</a> and <code>RepairCompMpcTree</code>. Nothing in the stack knows where the simulator put the props.</p>
+      <p>The map is <code>init_data</code>, the RoboSub 2026 layout as the team measured it. Two runs:</p>
       <ul>
-        <li><strong>Exact course.</strong> Nereus puts every prop exactly where the map says.</li>
-        <li><strong>Moved course.</strong> Every prop is shifted <span id="shift-text">0.6 m east and 0.4 m south (72 cm)</span>, as if the whole layout had been measured from the wrong corner, and the torpedo board another 0.9 m east and 0.9 m north on top of that: a prop measured badly. The shared shift is the offset mapping estimates; the torpedo's extra 1.27 m is a layout deviation.</li>
+        <li><strong>Exact course.</strong> Every prop exactly where the map says.</li>
+        <li><strong>Moved course.</strong> Every prop shifted <span id="shift-text">0.6 m east and 0.4 m south (72 cm)</span> (the offset mapping estimates), and the torpedo another 0.9 m east and 0.9 m north (a 1.27 m layout deviation).</li>
       </ul>
-      <p>Both runs finished the tree with status SUCCESS. That sounds better than it is: every task in the tree fails soft (Chapter 9), so a search that times out just hands over to the next task. On the moved course two things went wrong that only the data shows, and they are the most useful part of this chapter.</p>
-      <p>One thing the replay shows that is <em>not</em> a problem: at the gate the forward camera reports a slalom pole on one of the gate's legs, a false detection (Chapter 3). The tree keeps the map locked through the gate, so mapping ignores it, and even unlocked it would only be fused if <code>slalom_parent</code> were the target. That is what targets are for.</p>
+      <p>Both ended SUCCESS, but every task fails soft (Chapter 9), so the moved-course failures only show in the data. The false slalom pole on a gate leg (Chapter 3) is harmless: the map is locked through the gate.</p>
     </div>
 
     <figure class="fig">
@@ -50,61 +47,68 @@
           <div><p id="card-text">&nbsp;</p><p class="tree" id="card-tree">&nbsp;</p></div>
         </div>
       </div>
-      <figcaption><b>Both runs from above.</b> Grey shapes are the props where Nereus put them, dashed rings where Talos's map has them. Filled dots with ellipses are mapping's estimate and its 2σ uncertainty once the prop is confirmed; hollow dots are estimates not confirmed by detections since their last reset, which mapping publishes with the 1 m² covariance floor. Small dots are single detections as they arrive, each with a short line along the surface normal it measured; little circles are objects in another prop's frame (torpedo holes, the table's baskets and items, the bin targets). The orange wedge is the forward camera's field of view. Under the map: the camera at the last thing mapping or the tree reported, and what the tree is doing. The task buttons jump straight to each part of the run.</figcaption>
+      <figcaption><b>Both runs from above.</b> Grey shapes are the true props, dashed rings the map's priors, filled dots with 2σ ellipses confirmed estimates, hollow dots unconfirmed ones, small dots single detections. Use the task buttons to jump.</figcaption>
     </figure>
 
     <figure class="fig">
       <video class="viewer-clip" id="run-video" src="video/mission_8x.mp4" poster="video/mission_8x.jpg" controls muted playsinline preload="metadata"></video>
       <div class="vh-chapters" id="run-video-chapters" role="group" aria-label="Jump to a task"></div>
-      <figcaption><b>The exact-course run in the Nereus viewer</b>, eight times real speed, from the kill switch to the end of the tree. The pool view follows Talos, with mapping's covariance ellipsoids where TF puts each estimate; below it are the forward and downward cameras and the course map, and mapping's current target is on the left. Tap a task to jump to it.</figcaption>
+      <figcaption><b>The exact-course run in the Nereus viewer</b> at 8× speed, with mapping's covariance ellipsoids, both cameras and the current target. Tap a task to jump.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="offset" data-short="1: the torpedo moves the map">What went wrong 1: the torpedo moves the whole map</h2>
-      <p>In short: the slalom put the map in the right place, then the badly placed torpedo was explained mostly as the robot having drifted, which dragged every prop Talos had not looked at yet back off the truth.</p>
-      <p>The first prop mapping is asked to find is the slalom; the gate is driven through straight from its prior and never targeted. 65 s into the run the slalom's first four detections agree, and after ten it is confirmed and its track becomes the map's first fix. One sighting can't tell a moved course from one badly placed prop, so the solve splits the 72 cm by the two uncertainties, and almost all of it goes to the offset (94 % by the configured priors; in simulation the offset's start prior is effectively unlimited, see the end of this chapter): (0.57, −0.38) m against the (0.60, −0.40) m Nereus applied. Every prop the map has not seen moves with it, so the torpedo, the bins and the table are all predicted 68 cm closer to the truth before Talos has looked at them.</p>
-      <p>Then the torpedo. Its prior is 1.58 m from where it really is; after the offset, 1.27 m. That is not far enough from the map's prediction to need the long, 12-detection acquisition, because the prediction is wide by then: 23 m of travel since the slalom (about 21 cm of drift per axis at <code>drift_var_per_m_xy</code> = 0.002) plus the 2° course-yaw prior, which is 63 cm at the torpedo's 18 m from the origin. Four detections agree, the torpedo is confirmed and becomes a second fix, and the solve now has two props that disagree.</p>
-      <p>It does not release the torpedo. Its model has cheaper explanations than a 5σ layout error: odometry that drifted 20-odd cm between the two sightings, and a small turn of the whole layout (the course yaw). The newest offset node, the one every unseen prop hangs from, jumps to (1.13, −0.12) m: 56 cm east and 25 cm north, part of the way toward the torpedo's extra (0.9, 0.9) m. The torpedo itself ends 11 cm from the truth, but the gate, the bins and the table, predicted from that offset, end 62–77 cm off: no better than their priors. In Nereus the odometry really drifted less than 15 cm over the whole run, so here the drift model was the wrong explanation. On the robot, with real drift, it may well be the right one. Which one the solve picks depends on <code>drift_var_per_m_xy</code>, <code>course_yaw_std_deg</code> and <code>layout_std_xy</code>, and a robot run with measured drift is the way to set them.</p>
+      <p>The slalom put the map in the right place. Then the badly placed torpedo was explained mostly as drift, dragging every unseen prop back off the truth.</p>
+      <ul>
+        <li><strong>Slalom (65 s).</strong> Four detections agree, ten confirm it. One sighting can't tell a moved course from one moved prop, so the solve splits the 72 cm by the uncertainties; almost all goes to the offset (94 % with the configured priors; see the end of this chapter): (0.57, −0.38) m against the true (0.60, −0.40) m. Unseen props are now 68 cm closer to the truth.</li>
+        <li><strong>Torpedo.</strong> 1.27 m off after the offset. The prediction is wide by then: 23 m of travel (about 21 cm of drift per axis at <code>drift_var_per_m_xy</code> = 0.002) plus the 2° course-yaw prior (63 cm at 18 m from the origin). So four detections suffice, and the solve now has two props that disagree.</li>
+        <li><strong>The solve keeps the torpedo.</strong> Drift and a small course turn are cheaper than a 5σ layout error. The newest offset node jumps to (1.13, −0.12) m. The torpedo ends 11 cm off, but the gate, bins and table end 62–77 cm off, no better than their priors.</li>
+      </ul>
+      <p>In Nereus odometry drifted under 15 cm, so drift was the wrong explanation here; on the robot it may be right. The balance is set by <code>drift_var_per_m_xy</code>, <code>course_yaw_std_deg</code> and <code>layout_std_xy</code>, best tuned from a robot run with measured drift.</p>
     </div>
     <figure class="fig">
       <div class="panel"><div id="offset-chart"></div></div>
-      <figcaption><b>Where mapping thinks the course sits.</b> The <code>map → offset</code> translation over the moved-course run, east and north, against the 0.6 m / −0.4 m Nereus applied (dashed). It steps twice: at the slalom, onto the truth; at the torpedo, halfway toward the torpedo's extra error. Shaded bands are the tree's tasks. Tap or hover for values.</figcaption>
+      <figcaption><b>Where mapping thinks the course sits.</b> The <code>map → offset</code> translation against the true shift (dashed): onto the truth at the slalom, then off it at the torpedo.</figcaption>
     </figure>
 
     <figure class="fig">
       <video class="viewer-clip" src="video/viewer_torpedo.mp4" poster="video/viewer_torpedo.jpg" controls muted playsinline preload="none"></video>
-      <figcaption><b>The torpedo approach in the Nereus viewer</b>, three times real speed, from 2:08 into the moved-course run. The camera follows Talos; the forward and downward camera windows are on the right, and mapping's covariance ellipsoids are drawn where TF puts each estimate.</figcaption>
+      <figcaption><b>The torpedo approach in the Nereus viewer</b> at 3× speed, from 2:08 into the moved-course run.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="basket" data-short="2: the lost basket">What went wrong 2: a basket that was never found</h2>
-      <p>In short: because the map was off, the down camera kept looking at the wrong spot for the warning basket. It only ever caught the basket for two or three frames at a time, and mapping won't start tracking a new target until four detections agree within four seconds. So the basket never got an estimate, and the table was never fit to its baskets.</p>
-      <p>The table task (Chapter 9) searches for the two baskets with <code>DownwardSearchMpc</code>: hover the down camera 1.5 m over the basket's <em>current estimate</em>, follow it while it is in view, otherwise spiral out around the estimate, for up to 60 s each. The helmet basket went fine: found at 3:39, its error at 0.00023, under the 0.0005 it needed (about 1.2 cm σ). Then the warning basket.</p>
-      <p>Its estimate came from the map: the prior position on the table, carried by the table's frame, which hangs off the offset the torpedo had just pulled 60 cm the wrong way. Mapping had the warning basket 69 cm from where it really was. The tree flew the camera over that spot and spiralled. Every 14 s the spiral swept the edge of the camera's view across the real basket: the tree logged <code>warning in view: following the detection</code>, the detector reported it two or three times, and then it was gone again, because "following" means re-aiming at <code>warning_frame</code>, which had not moved.</p>
-      <p>And it couldn't move. A target that has just been reset holds its first detections until 4 agree within 0.3 m over the last 4 s (acquisition by agreement, Chapter 7). Two or three every 14 s never makes four, so every burst aged out unused, the estimate stayed at the prior, the published covariance stayed at the unconfirmed 1.73, and after 60 s the search gave up. The tree's one-second check that both baskets are converged failed, it logged <code>helmet,warning, not both converged below 0.0005: the table keeps its prior</code>, and <code>center_table_on_baskets</code> never ran. On the exact course the same task found both baskets and fit the table: <code>Moved table by (-0.036, 0.033, -0.000) in map to fit the baskets, yawed table 0.3 deg</code>.</p>
+      <p>The map was off, so the down camera searched the wrong spot for the warning basket. It caught the basket two or three frames at a time; mapping needs four that agree. No estimate, no table fit.</p>
+      <ul>
+        <li><code>DownwardSearchMpc</code> hovers 1.5 m over the basket's <em>estimate</em>, follows it in view, else spirals, for up to 60 s. The helmet basket was found at 3:39 (error 0.00023, about 1.2 cm σ).</li>
+        <li>The warning basket's estimate hung off the offset the torpedo had pulled the wrong way: 69 cm from the truth.</li>
+        <li>Every 14 s the spiral swept the real basket across the edge of the view (<code>warning in view: following the detection</code>). But "following" re-aims at <code>warning_frame</code>, which had not moved.</li>
+        <li>A reset target needs 4 detections within 0.3 m in the last 4 s (Chapter 7). Bursts of 2–3 aged out, the covariance stayed at 1.73, and the search timed out.</li>
+      </ul>
+      <p>The tree logged <code>helmet,warning, not both converged below 0.0005: the table keeps its prior</code>. On the exact course: <code>Moved table by (-0.036, 0.033, -0.000) in map to fit the baskets, yawed table 0.3 deg</code>.</p>
     </div>
     <figure class="fig">
       <div class="panel"><div id="warning-chart"></div></div>
-      <figcaption><b>Warning-basket detections against the acquisition rule.</b> Each dot is one detection of the warning basket during its 60 s search; the line is how many of them fall in the last 4 s, the window mapping looks at. It needs 4. Shaded spans are when the tree said the basket was in view. Tap or hover.</figcaption>
+      <figcaption><b>Warning-basket detections against the acquisition rule.</b> The line counts detections in the last 4 s; it never reaches the 4 mapping needs.</figcaption>
     </figure>
     <figure class="fig">
       <div class="panel flush"><canvas id="warning-map" aria-label="Top-down view of the table during the warning search"></canvas></div>
-      <figcaption><b>The table during the search, from above</b> (0.2 m grid). The grey rectangle is the table where Nereus put it. Pink dots are where the warning detections really were; the hollow pink ring is mapping's <code>warning_frame</code>, which the camera kept aiming at, and the filled one the helmet basket once found. The dark line is Talos's path while it searched, spiralling round the stale estimate.</figcaption>
+      <figcaption><b>The table during the search</b> (0.2 m grid). Pink dots are the real warning detections; the hollow ring is the stale <code>warning_frame</code> the dark path spirals around.</figcaption>
     </figure>
     <div class="prose">
-      <p>Nothing here is a bug on its own. Each rule is sensible: hold back the first detections of a new target, search around the estimate, check the baskets before trusting them. Together they deadlock when the estimate starts more than about half a camera footprint off. Ways out, any one of which would have worked here: have the search steer by the raw detection, not the mapping frame, until the target is acquired; keep held detections longer than 4 s (or count agreeing bursts across glances); or, upstream, keep the torpedo from moving the offset (Chapter 8).</p>
+      <p>No single rule is a bug, but together they deadlock when the estimate starts more than about half a camera footprint off. Any one fix would have worked here: steer by the raw detection until acquired, keep held detections longer than 4 s, or keep the torpedo from moving the offset (Chapter 8).</p>
     </div>
 
     <div class="prose">
       <h2 id="errors">Every prop against the truth</h2>
-      <p>On the moved course every prior starts 72 cm off (the torpedo 1.58 m). The chart shows each prop's error through the run: the slalom and torpedo drop when they are confirmed, and the unseen props move with the offset, first toward the truth, then, after the torpedo, away from it again. On the exact course the errors stay at the few centimetres the detector's reference point differs from the simulator's: the slalom ends 6 cm off, the torpedo 12 cm. The table under it compares the two runs at the end of the mission.</p>
+      <p>On the moved course every prior starts 72 cm off (the torpedo 1.58 m). On the exact course errors stay at a few centimetres: the slalom ends 6 cm off, the torpedo 12 cm.</p>
     </div>
     <figure class="fig">
       <div class="panel">
         <div class="controls"><span class="seg" id="err-run"><button data-run="shifted" aria-pressed="true">Moved course</button><button data-run="exact">Exact course</button></span></div>
         <div id="error-chart"></div>
       </div>
-      <figcaption><b>Horizontal error of each prop's estimate</b>, distance from the simulator's placement, through the run. Lines are the published estimate. The error never goes to zero: Nereus places each prop by its model origin, the detector measures the face it sees, and the two differ by a few centimetres to 15 cm (the torpedo's origin is not the board's centre). Tap or hover.</figcaption>
+      <figcaption><b>Horizontal error of each published estimate</b> through the run. It never reaches zero: the prop's model origin and the face the detector sees differ by a few cm to 15 cm.</figcaption>
     </figure>
     <div class="prose">
       <table class="params" id="final-table"></table>
@@ -112,7 +116,7 @@
 
     <div class="prose">
       <h2 id="log">What mapping said</h2>
-      <p>Mapping logs only when something changes: a target reset, a group of detections agreeing, a prior released, a table fit. These are the lines from the moved-course run, at their mission times, interleaved with the behaviour tree's target changes. Tap a line to move the replay there.</p>
+      <p>Mapping logs only when something changes. Moved-course lines, with the tree's target changes; tap one to move the replay there.</p>
     </div>
     <figure class="fig narrow">
       <div class="panel"><ol class="maplog" id="maplog"></ol></div>
@@ -122,12 +126,12 @@
     <div class="prose">
       <h2 id="sim">What the simulator does and doesn't show</h2>
       <ul>
-        <li><strong>Depth is clean.</strong> Nereus renders depth from its geometry with mild noise, so detections scatter about ten times less than the noise model assumes (Chapter 6), and the depth gate rarely has anything to remove (Chapter 4). The robot's stereo depth is noisier and fails on texture-less water and walls.</li>
-        <li><strong>The odometry is good.</strong> The simulated DVL and gyro are close to ideal, so the EKF drifted less than 15 cm over the 133 m run. Any drift the solve assumes is its own explanation, not something that happened. On the robot, the offset also has to absorb real drift.</li>
-        <li><strong>The start-time drift is large.</strong> In simulation the node reads the clock before the first <code>/clock</code> message arrives, so its first <code>predict</code> adds drift for the whole epoch, about 1.8 × 10<sup>9</sup> s, to the offset's prior (the 17 900 m² it publishes at the start). That makes the offset's start prior unlimited in Nereus. On the robot, with wall time, it starts at the configured 1 m. With the configured prior a first sighting would put 94 % of a shift on the offset rather than nearly all of it, so the runs here are barely affected, but it is worth fixing in <code>mapping.py</code> (take <code>last_predict_time</code> on the first odometry or detection, not in the constructor).</li>
-        <li><strong>Everything else is real.</strong> The models, thresholds, filters, the tree's covariance checks and its timing are what run on Talos.</li>
+        <li><strong>Depth is clean.</strong> Detections scatter about ten times less than the noise model assumes (Chapter 6). Real stereo depth is noisier.</li>
+        <li><strong>Odometry is good.</strong> The EKF drifted under 15 cm over the 133 m run. On the robot the offset must absorb real drift.</li>
+        <li><strong>The start-time drift is huge.</strong> In simulation the node reads the clock before the first <code>/clock</code> message, so its first <code>predict</code> adds about 1.8 × 10<sup>9</sup> s of drift to the offset's prior (17 900 m² at the start). On the robot it starts at the configured 1 m. The runs here are barely affected, but it is worth fixing in <code>mapping.py</code>: set <code>last_predict_time</code> on the first odometry or detection, not in the constructor.</li>
+        <li><strong>Everything else is real</strong>: models, thresholds, filters, the tree's checks and timing.</li>
       </ul>
-      <p>The data for this chapter and the overview's replay come from <code>ros2 bag</code> recordings of the runs (<code>tools/bag_to_mission.py</code>), with mapping's log lines lined up to mission time.</p>
+      <p>Data comes from <code>ros2 bag</code> recordings via <code>tools/bag_to_mission.py</code>.</p>
     </div>
     <nav class="next" aria-label="Chapter navigation"></nav>
   </article>

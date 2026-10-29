@@ -12,22 +12,26 @@
   <header class="page-head">
     <div class="kicker">Vision · Chapter 1</div>
     <h1>Cameras and calibration</h1>
-    <p class="lede">Before a pixel can say where something is, the software has to know exactly how the camera turned the world into that pixel. Those numbers are the calibration, and underwater the ones that come from the factory are wrong.</p>
+    <p class="lede">To turn a pixel into a position, the software needs the exact numbers for how the camera makes images. Underwater, the factory numbers are wrong.</p>
   </header>
   <aside class="short"><span class="label">The short version</span><ul>
-    <li>A camera is described by its <span class="term">intrinsics</span> (focal length and image centre, in pixels) and its <span class="term">lens distortion</span>. A stereo camera also has <span class="term">extrinsics</span>: where its two lenses sit relative to each other.</li>
-    <li>Talos's ZED X Mini cameras look through a flat window into water. The window bends light, so the focal length, the distortion and even the stereo geometry are different from the factory's in-air calibration.</li>
-    <li>The team calibrates each camera underwater: photograph a <span class="term">ChArUco board</span> from many angles with both lenses, let OpenCV solve for the numbers, and give the result to the ZED SDK.</li>
-    <li>Depth comes from how far a point shifts between the left and right images. A tiny matching error is a big depth error far away: it grows with the square of the distance.</li>
-    <li>Where each camera sits on the robot (camera → <code>base_link</code>) comes from CAD and a measured tilt, in the robot description, not from this calibration.</li>
+    <li>A camera is described by its <span class="term">intrinsics</span> (focal length and image centre, in pixels) and its <span class="term">lens distortion</span>.</li>
+    <li>The flat window in front of each ZED X Mini bends light, so the in-air factory calibration is wrong underwater.</li>
+    <li>The team calibrates underwater with a <span class="term">ChArUco board</span> and OpenCV, and hands the result to the ZED SDK.</li>
+    <li>Stereo depth error grows with the square of distance.</li>
   </ul></aside>
   <article>
     <div class="prose">
       <h2 id="pinhole">From a point to a pixel</h2>
-      <p>Everything in the vision code assumes the simplest possible camera, a <strong>pinhole</strong>: every ray of light passes through one point, the optical centre, and lands on a flat sensor behind it. Put the camera frame at that centre, with <span class="m">z</span> straight out of the lens, <span class="m">x</span> to the right and <span class="m">y</span> down (ROS calls this the <em>optical frame</em>, <code>talos/ffc_left_camera_optical_frame</code>). A point at <span class="m">(x, y, z)</span> lands on pixel</p>
+      <p>The vision code treats each camera as a <strong>pinhole</strong>: every ray passes through one point, the optical centre. The camera frame sits there, with <span class="m">z</span> out of the lens, <span class="m">x</span> right and <span class="m">y</span> down (the <em>optical frame</em>, e.g. <code>talos/ffc_left_camera_optical_frame</code>). A point <span class="m">(x, y, z)</span> lands on pixel</p>
       <div class="M">u = f_x\,\frac{x}{z} + c_x, \qquad v = f_y\,\frac{y}{z} + c_y \qquad\Longleftrightarrow\qquad \begin{bmatrix} u \\ v \\ 1 \end{bmatrix} \propto \underbrace{\begin{bmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{bmatrix}}_{K} \begin{bmatrix} x \\ y \\ z \end{bmatrix}</div>
-      <p>The four numbers are the <strong>intrinsics</strong>. <span class="m">f_x</span> and <span class="m">f_y</span> are the focal length measured in pixels: how many pixels one unit of <span class="m">x/z</span> covers. <span class="m">(c_x, c_y)</span> is the <strong>principal point</strong>, the pixel the lens axis goes through, near but never exactly at the image centre. <span class="m">K</span> is the same four numbers written as a matrix, which is how every library stores them. Talos's forward camera, calibrated underwater, has <span class="m">f_x = 1701.5</span>, <span class="m">f_y = 1702.4</span>, <span class="m">c_x = 935.2</span>, <span class="m">c_y = 579.4</span> for its 1920×1200 image, so the picture is <span class="m">2\arctan(960/1701.5) = 59°</span> wide.</p>
-      <p>Going the other way is what the detector does: a pixel only tells you a <em>direction</em>, <span class="m">((u - c_x)/f_x,\ (v - c_y)/f_y,\ 1)</span>. To get a point you need its distance too, which is what the depth image is for (Chapter 4).</p>
+      <ul>
+        <li><span class="m">f_x, f_y</span>: focal length in pixels.</li>
+        <li><span class="m">(c_x, c_y)</span>: the <strong>principal point</strong>, where the lens axis hits the image.</li>
+        <li><span class="m">K</span>: the same four numbers as a matrix.</li>
+      </ul>
+      <p>Talos's forward camera (underwater, 1920×1200): <span class="m">f_x = 1701.5</span>, <span class="m">f_y = 1702.4</span>, <span class="m">c_x = 935.2</span>, <span class="m">c_y = 579.4</span>, a 59° wide view.</p>
+      <p>A pixel alone gives only a direction, <span class="m">((u - c_x)/f_x,\ (v - c_y)/f_y,\ 1)</span>. The depth image supplies the distance (Chapter 4).</p>
     </div>
     <figure class="fig">
       <div class="panel">
@@ -35,14 +39,19 @@
         <svg class="diagram" id="pin-svg" viewBox="0 0 900 330" role="img" aria-label="Side view of a pinhole camera projecting a point onto the image"></svg>
         <div class="frame-note" id="pin-note"></div>
       </div>
-      <figcaption><b>The pinhole model, from the side.</b> Drag the orange point (or tap where it should go). Its ray passes through the optical centre and lands on the sensor; the pixel row is <span class="m">v = f_y\,y/z + c_y</span>. A longer focal length spreads the same scene over more pixels: a narrower view, finer detail. Every point on the dashed ray lands on the same pixel, which is why one image can't tell you distance.</figcaption>
+      <figcaption><b>The pinhole model, from the side.</b> Drag the orange point: every point on its dashed ray lands on the same pixel, so one image can't tell distance.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="distortion">Lenses bend straight lines</h2>
-      <p>Real lenses are not pinholes. Rays far from the axis bend a little more or less than the pinhole model says, so straight edges near the corners of the image come out curved. OpenCV's standard model (the one the team's calibration files use, called <em>plumb bob</em> or Brown–Conrady) describes it with five numbers <span class="m">(k_1, k_2, p_1, p_2, k_3)</span>. Take the ideal pinhole coordinates <span class="m">x' = x/z</span>, <span class="m">y' = y/z</span> and their distance from the axis <span class="m">r^2 = x'^2 + y'^2</span>; the lens moves them to</p>
+      <p>Real lenses curve straight edges near the image corners. OpenCV's <em>plumb bob</em> model (Brown–Conrady) uses five numbers <span class="m">(k_1, k_2, p_1, p_2, k_3)</span>. With <span class="m">x' = x/z</span>, <span class="m">y' = y/z</span> and <span class="m">r^2 = x'^2 + y'^2</span>, the lens moves them to</p>
       <div class="M" data-narrow="\begin{gathered} x'' = x'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + 2p_1 x'y' + p_2(r^2 + 2x'^2) \\[4pt] y'' = y'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + p_1(r^2 + 2y'^2) + 2p_2 x'y' \end{gathered}">x'' = x'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + 2p_1 x'y' + p_2(r^2 + 2x'^2), \qquad y'' = y'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + p_1(r^2 + 2y'^2) + 2p_2 x'y'</div>
-      <p>and the pixel is then <span class="m">u = f_x x'' + c_x</span>, <span class="m">v = f_y y'' + c_y</span>. The <span class="m">k</span> terms are <strong>radial</strong>: they push points straight out from the centre (positive: <em>pincushion</em>, edges bow inward) or pull them in (negative: <em>barrel</em>). The <span class="m">p</span> terms are <strong>tangential</strong>, from a lens not quite parallel to the sensor. The ZED SDK uses these coefficients to <strong>rectify</strong> every image before publishing it, so the <code>image_rect_color</code> the detector sees is already a pinhole image, and the code can use the simple formula above.</p>
+      <p>then <span class="m">u = f_x x'' + c_x</span>, <span class="m">v = f_y y'' + c_y</span>.</p>
+      <ul>
+        <li><strong>Radial</strong> (<span class="m">k</span>): positive is <em>pincushion</em>, negative is <em>barrel</em>.</li>
+        <li><strong>Tangential</strong> (<span class="m">p</span>): a lens not quite parallel to the sensor.</li>
+      </ul>
+      <p>The ZED SDK <strong>rectifies</strong> (undistorts) every image before publishing, so <code>image_rect_color</code> is already a pinhole image.</p>
     </div>
     <figure class="fig">
       <div class="panel">
@@ -50,19 +59,19 @@
         <canvas class="fig-canvas" id="dist-canvas" width="960" height="600"></canvas>
         <div class="frame-note" id="dist-note"></div>
       </div>
-      <figcaption><b>Raw and rectified.</b> The ZED SDK rectifies every frame before it is published: it undistorts the raw image with the calibration and resamples it to new, rectified intrinsics with zero distortion. Nereus renders that rectified image directly. <em>Rectified</em> shows it with a grid that is straight in the pool. <em>Raw</em> runs the calibration backwards (raw intrinsics and distortion coefficients, then the rectified intrinsics) to show what the sensor actually records through the port. The presets are Talos's underwater calibrations; <em>Ideal lens</em> has no distortion, so raw and rectified are the same. <em>×3</em> exaggerates the coefficients.</figcaption>
+      <figcaption><b>Raw and rectified.</b> <em>Raw</em> runs Talos's underwater calibration backwards to show what the sensor records; <em>Rectified</em> is what gets published. <em>×3</em> exaggerates the coefficients.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="underwater">Why water breaks the factory calibration</h2>
-      <p>Every ZED leaves the factory calibrated, in air. Talos's cameras look out through a flat window, and light bends where it crosses from water into the air inside the housing. Snell's law says a ray at angle <span class="m">\theta_w</span> from the axis in water travels at <span class="m">\theta_a</span> inside, with</p>
+      <p>ZEDs are calibrated in air at the factory. Talos's cameras look through a flat window, and light bends crossing from water into air (Snell's law):</p>
       <div class="M">n_\text{air} \sin\theta_a = n_\text{water} \sin\theta_w, \qquad n_\text{water} \approx 1.33</div>
-      <p>so rays from the edge of the scene are bent outward, toward the edge of the sensor. Two things follow:</p>
       <ul>
-        <li><strong>The field of view shrinks</strong> by about the factor 1.33, and the focal length in pixels grows by the same factor. That's why Talos's underwater <span class="m">f_x \approx 1700</span> is so much longer than the lens's in-air value.</li>
-        <li><strong>Distortion appears.</strong> Snell's law is in sines, not angles, so the bending grows faster than linearly toward the edges: a strong pincushion that the in-air distortion coefficients know nothing about. It shows up as the large positive <span class="m">k_1</span> (about +0.27) in both of Talos's calibrations.</li>
+        <li><strong>The view narrows</strong> by about 1.33, and the focal length in pixels grows by the same factor. Hence <span class="m">f_x \approx 1700</span>.</li>
+        <li><strong>Pincushion distortion appears</strong>, seen as <span class="m">k_1 \approx +0.27</span> in both of Talos's calibrations.</li>
+        <li><strong>The stereo geometry changes</strong>, so factory depth is off by roughly the refraction factor.</li>
       </ul>
-      <p>The stereo geometry changes too, because each lens's rays now bend at the window differently. A factory calibration underwater gives depth that is wrong by roughly the refraction factor and surfaces that come out curved or tilted. So the team calibrates underwater and turns the ZED SDK's <strong>self-calibration</strong> off (<code>self_calib: false</code> in each camera's config): left on, the SDK would "correct" the stereo geometry at start-up using its in-air assumptions.</p>
+      <p>So the team calibrates underwater and sets <code>self_calib: false</code>. Otherwise the SDK would "correct" the stereo geometry at start-up with in-air assumptions.</p>
     </div>
     <figure class="fig narrow">
       <div class="panel">
@@ -70,15 +79,20 @@
         <svg class="diagram" id="refr-svg" viewBox="0 0 600 300" role="img" aria-label="A ray refracting at a flat camera window"></svg>
         <div id="refr-chart"></div>
       </div>
-      <figcaption><b>A flat port, idealized.</b> Top: one ray from the water bending at the window (drag the slider for its angle). Bottom: where it lands on the sensor, against where a pinhole with 1.33× the focal length would put it. The ratio is 1 near the centre and climbs toward the edges, which is pincushion distortion. This ignores the window's thickness and the lens sitting a little behind it; the real numbers come from calibrating.</figcaption>
+      <figcaption><b>A flat port, idealized.</b> The landing-point ratio against a 1.33× pinhole climbs toward the edges: that is pincushion distortion.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="stereo">Two lenses make depth</h2>
-      <p>A ZED X Mini is two cameras 50 mm apart, looking the same way. A point at depth <span class="m">z</span> appears in both images, but shifted sideways: the <strong>disparity</strong> <span class="m">d = u_\text{left} - u_\text{right}</span>. Similar triangles give the depth from it:</p>
+      <p>A ZED X Mini is two cameras about 50 mm apart. A point shows up shifted sideways between them by the <strong>disparity</strong> <span class="m">d = u_\text{left} - u_\text{right}</span>:</p>
       <div class="M">z = \frac{f\,B}{d}, \qquad \delta z \approx \frac{z^2}{f\,B}\,\delta d</div>
-      <p>where <span class="m">B</span> is the <strong>baseline</strong>, the distance between the lenses, and <span class="m">f</span> the focal length in pixels. With Talos's <span class="m">f = 1701.5</span> px and <span class="m">B = 49.75</span> mm, a point 2 m away shifts 42 px between the images; at 6 m it shifts only 14. The second formula is why depth gets bad quickly with range: a matching error <span class="m">\delta d</span> of a quarter pixel is 1.2 cm of depth at 2 m and 11 cm at 6 m. That <span class="m">z^2</span> is the reason mapping's noise model (Chapter 6) trusts depth much less than direction.</p>
-      <p>Finding which pixel in the right image matches each pixel in the left is the SDK's job, done on the GPU. It is only a 1D search if the two images are <strong>rectified</strong>: warped so that a point appears on the <em>same row</em> in both. To do that the SDK needs the <strong>stereo extrinsics</strong>: the rotation <span class="m">R</span> and translation <span class="m">T</span> from the left lens to the right. Talos's forward camera has <span class="m">T = (-49.75,\ 0.02,\ 0.98)</span> mm and an <span class="m">R</span> that turns the right lens about 1.35° about the vertical axis. Those are exactly what the stereo calibration measures.</p>
+      <p><span class="m">B</span> is the <strong>baseline</strong> (lens spacing). With <span class="m">f = 1701.5</span> px and <span class="m">B = 49.75</span> mm:</p>
+      <ul>
+        <li>2 m away: 42 px disparity; a quarter-pixel matching error is 1.2 cm of depth.</li>
+        <li>6 m away: 14 px; the same error is 11 cm.</li>
+      </ul>
+      <p>That <span class="m">z^2</span> is why mapping trusts depth less than direction (Chapter 6).</p>
+      <p>The SDK matches pixels on the GPU. That is a 1D search only if the images are <strong>rectified</strong> so a point sits on the same row in both. That needs the <strong>stereo extrinsics</strong> (rotation <span class="m">R</span> and translation <span class="m">T</span>, left lens to right). Forward camera: <span class="m">T = (-49.75,\ 0.02,\ 0.98)</span> mm, and <span class="m">R</span> turns the right lens about 1.35° about vertical.</p>
     </div>
     <figure class="fig">
       <div class="panel">
@@ -86,17 +100,18 @@
         <div id="stereo-chart"></div>
         <div class="frame-note" id="stereo-note"></div>
       </div>
-      <figcaption><b>Depth from disparity</b>, for Talos's forward camera (<span class="m">fB</span> = 84.6 px·m). The line is depth against range; the band is the depth error a fixed matching error causes. Change the matching error, or the baseline, to see why a wider stereo camera sees depth further. Tap or hover for values.</figcaption>
+      <figcaption><b>Depth from disparity</b> for the forward camera (<span class="m">fB</span> = 84.6 px·m). The band is the depth error from a fixed matching error; try a wider baseline.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="charuco">Why a ChArUco board</h2>
-      <p>Calibration needs pictures of something whose geometry is known exactly, seen from many angles. The solver finds the intrinsics, distortion and stereo extrinsics that best explain where every known point landed in every image. Two kinds of target are common, and each has a weakness:</p>
+      <p>Calibration photographs a target of known geometry from many angles and solves for the numbers that best explain it.</p>
       <ul>
-        <li>A <strong>chessboard</strong>'s inner corners can be located to a fraction of a pixel, because each is where four squares meet. But the detector has to see the whole board to know which corner is which, and a board that is partly out of frame or partly in murk is useless.</li>
-        <li><strong>ArUco markers</strong> are little black-and-white codes, each with an ID, so any one that is visible identifies itself. But a marker's corners are less precise than a chessboard's.</li>
+        <li><strong>Chessboard:</strong> sub-pixel corners, but the whole board must be visible.</li>
+        <li><strong>ArUco markers:</strong> each identifies itself, but corners are less precise.</li>
+        <li><strong>ChArUco:</strong> a chessboard with a marker in each white square. Any visible part gives precise, identified corners.</li>
       </ul>
-      <p>A <strong>ChArUco</strong> board is a chessboard with an ArUco marker printed in each white square. The markers say which square is which; the chessboard corners between them are then located to sub-pixel accuracy, each with a known ID. So any visible part of the board gives precise, identified corners. Underwater that matters: the board is often at an angle, partly out of frame, or half lost in scattered light, and corners near the edges of the image, where distortion is strongest, are exactly the ones a chessboard calibration would struggle to get.</p>
+      <p>Underwater the board is often tilted, cut off or in murk, so this matters.</p>
       <!-- TODO(team): board specification (squares, square and marker size, ArUco dictionary) from the solver on the Orin (/home/ros/zed_cals). -->
     </div>
     <figure class="fig">
@@ -105,20 +120,20 @@
         <canvas class="fig-canvas" id="charuco-canvas" width="900" height="520"></canvas>
         <div class="frame-note" id="charuco-note"></div>
       </div>
-      <figcaption><b>Partly hidden, still useful.</b> A ChArUco board in perspective. Drag the hiding slider to cover part of it, as murk or the image edge would. A chessboard needs every corner (it is lost as soon as one is hidden); here every inner corner with a visible marker next to it keeps its ID (green). The board layout here is illustrative, not the team's exact board.</figcaption>
+      <figcaption><b>Partly hidden, still useful.</b> Hide part of the board: corners next to a visible marker keep their ID (green). Layout is illustrative.</figcaption>
     </figure>
 
     <div class="prose">
       <h2 id="procedure">Calibrating, step by step</h2>
       <ol class="steps">
-        <li><strong>Get the board in the water.</strong> It has to be rigid and flat (any bend is an error the solver can't see) and well lit.</li>
-        <li><strong>Capture stereo pairs.</strong> <a href="https://github.com/osu-uwrt/riptide_core/blob/followpath-speed/riptide_hardware/riptide_hardware2/picture_taker.py"><code>riptide_hardware2/picture_taker.py</code></a>, launched by <code>zed.launch.py</code>, subscribes to the camera's <code>stereo_raw/image_raw_color</code>: the <em>raw</em> side-by-side image from both lenses, before any rectification, because calibration has to see what the lenses really do. Each call of its <code>capture_image</code> service saves the newest frame cut in half, as lossless PNGs with the same name in <code>cal_images/left/</code> and <code>cal_images/right/</code>.</li>
-        <li><strong>Cover everything.</strong> Dozens of pairs, with the board near and far, tilted every way, and moved around so it visits the whole image, especially the corners. A solver only learns the distortion where it has seen corners.</li>
-        <li><strong>Solve.</strong> Detect the ChArUco corners in each image (OpenCV's <code>aruco</code> module), calibrate each lens on its own (<code>calibrateCamera</code>: <span class="m">K</span> and distortion), then the pair (<code>stereoCalibrate</code>: <span class="m">R</span> and <span class="m">T</span>). Which coefficients to free is a choice: the current forward calibration fixes the tangential terms at zero and frees <span class="m">k_3</span>; the 2026 downward one does the opposite.</li>
-        <li><strong>Check it.</strong> The RMS reprojection error (how far, on average, each detected corner is from where the solved model puts it) should be well under a pixel. The baseline should come out near 50 mm and <span class="m">R</span> near the identity. If one image has a much larger error than the rest, drop it and solve again.</li>
-        <li><strong>Install it.</strong> Save the result as an OpenCV <code>FileStorage</code> YAML with <code>Size</code>, <code>K_LEFT</code>, <code>D_LEFT</code>, <code>K_RIGHT</code>, <code>D_RIGHT</code>, <code>R</code> and <code>T</code> (in mm) in <code>riptide_hardware/cfg/</code>, point the camera's <code>optional_opencv_calibration_file</code> at it in <a href="https://github.com/osu-uwrt/riptide_core/blob/followpath-speed/riptide_hardware/cfg/ffc_config.yaml"><code>ffc_config.yaml</code></a> or <code>dfc_config.yaml</code>, keep <code>self_calib: false</code>, and restart the ZED node. The SDK now rectifies with your numbers and publishes them on <code>rgb/camera_info</code>, which is where the detector reads its <span class="m">K</span>.</li>
+        <li><strong>Board in the water:</strong> rigid, flat, well lit.</li>
+        <li><strong>Capture stereo pairs</strong> with <a href="https://github.com/osu-uwrt/riptide_core/blob/followpath-speed/riptide_hardware/riptide_hardware2/picture_taker.py"><code>picture_taker.py</code></a> (launched by <code>zed.launch.py</code>). It reads the raw side-by-side <code>stereo_raw/image_raw_color</code>; each <code>capture_image</code> call saves PNGs to <code>cal_images/left/</code> and <code>cal_images/right/</code>.</li>
+        <li><strong>Cover everything:</strong> dozens of pairs, near and far, tilted, reaching the image corners.</li>
+        <li><strong>Solve</strong> with OpenCV: detect ChArUco corners (<code>aruco</code>), <code>calibrateCamera</code> per lens (<span class="m">K</span>, distortion), then <code>stereoCalibrate</code> (<span class="m">R</span>, <span class="m">T</span>). The forward calibration fixes tangential terms at zero and frees <span class="m">k_3</span>; the 2026 downward one does the opposite.</li>
+        <li><strong>Check:</strong> RMS reprojection error well under a pixel, baseline near 50 mm, <span class="m">R</span> near identity. Drop any image with a much larger error and re-solve.</li>
+        <li><strong>Install:</strong> save an OpenCV YAML (<code>Size</code>, <code>K_LEFT</code>, <code>D_LEFT</code>, <code>K_RIGHT</code>, <code>D_RIGHT</code>, <code>R</code>, <code>T</code> in mm) in <code>riptide_hardware/cfg/</code>. Point <code>optional_opencv_calibration_file</code> at it in <a href="https://github.com/osu-uwrt/riptide_core/blob/followpath-speed/riptide_hardware/cfg/ffc_config.yaml"><code>ffc_config.yaml</code></a> or <code>dfc_config.yaml</code>, keep <code>self_calib: false</code>, restart the ZED node. The detector reads <span class="m">K</span> from <code>rgb/camera_info</code>.</li>
       </ol>
-      <p>The solver script itself and the board's exact dimensions live on the robot (<code>/home/ros/zed_cals</code>), not in the repositories. The files it produced are in <code>riptide_hardware/cfg/</code>: the forward camera uses <a href="https://github.com/osu-uwrt/riptide_core/blob/followpath-speed/riptide_hardware/cfg/tirpak_ffc_charuco_3.yaml"><code>tirpak_ffc_charuco_3.yaml</code></a>, the downward camera <code>zedxm_dfc_2026_cal.yaml</code>.</p>
+      <p>The solver script and board dimensions live on the robot (<code>/home/ros/zed_cals</code>). Current files: <code>tirpak_ffc_charuco_3.yaml</code> (forward), <code>zedxm_dfc_2026_cal.yaml</code> (downward).</p>
     </div>
     <div class="prose">
       <table class="params">
@@ -132,21 +147,21 @@
 
     <div class="prose">
       <h2 id="extrinsics">Where the cameras are on the robot</h2>
-      <p>The calibration says how each camera maps the world to pixels, measured from that camera. To put a detection on the course map, mapping also needs where each camera is on Talos: the transform from <code>base_link</code> to the camera's optical frame. That one is not calibrated. It comes from the robot description, <a href="https://github.com/osu-uwrt/riptide_core/blob/followpath-speed/riptide_descriptions/config/talos.yaml"><code>riptide_descriptions/config/talos.yaml</code></a>, with positions from CAD and tilts measured on the robot, and the URDF publishes it as a fixed TF transform.</p>
+      <p>Mapping also needs each camera's place on Talos (<code>base_link</code> → optical frame). That is not calibrated: it comes from CAD and measured tilts in <a href="https://github.com/osu-uwrt/riptide_core/blob/followpath-speed/riptide_descriptions/config/talos.yaml"><code>talos.yaml</code></a>, published by the URDF as a fixed TF.</p>
       <ul>
-        <li><strong>Forward camera:</strong> about 11 cm ahead of <code>base_link</code>, 12 cm to starboard and 10 cm up, pitched 0.05 rad (2.9°) down.</li>
-        <li><strong>Downward camera:</strong> level with <code>base_link</code> fore and aft, 12 cm to starboard, pointing straight down.</li>
+        <li><strong>Forward:</strong> about 11 cm ahead, 12 cm to starboard, 10 cm up, pitched 0.05 rad (2.9°) down.</li>
+        <li><strong>Downward:</strong> level fore and aft, 12 cm to starboard, pointing straight down.</li>
       </ul>
-      <p>These matter as much as the calibration. A 1° error in the forward camera's pitch puts a prop 3.5 cm too high or low at 2 m, and every detection inherits it. The optical frame (<span class="m">z</span> forward, <span class="m">y</span> down) is turned relative to <code>base_link</code> (<span class="m">x</span> forward, <span class="m">z</span> up); the URDF handles that turn, and code should always go through TF rather than swapping axes by hand.</p>
+      <p>A 1° pitch error puts a prop 3.5 cm off at 2 m. Always go through TF rather than swapping axes by hand.</p>
 
       <h2 id="symptoms">How a bad calibration shows up</h2>
       <ul>
-        <li><strong>Flat things come out tilted or curved.</strong> The detector fits a plane to each prop (Chapter 4); a wrong distortion or stereo geometry bends the depth surface, and the normals point off.</li>
-        <li><strong>Distances are off by a constant factor.</strong> A wrong focal length or baseline scales depth. Props seem nearer or farther than they are, consistently.</li>
-        <li><strong>Straight edges are curved in <code>image_rect_color</code>.</strong> Rectification is supposed to make them straight.</li>
-        <li><strong>Depth has holes on textured surfaces.</strong> Bad rectification means the matcher searches the wrong row.</li>
+        <li><strong>Flat props come out tilted or curved</strong>, so plane normals point off.</li>
+        <li><strong>Distances off by a constant factor</strong>: wrong focal length or baseline.</li>
+        <li><strong>Curved edges in <code>image_rect_color</code></strong>.</li>
+        <li><strong>Depth holes on textured surfaces</strong>: the matcher searches the wrong row.</li>
       </ul>
-      <p>The detector's README gives the same first suggestion for orientations that come out slightly off: check that the camera is using the right calibration file.</p>
+      <p>If orientations look slightly off, first check the camera uses the right calibration file.</p>
     </div>
     <nav class="next" aria-label="Chapter navigation"></nav>
   </article>
