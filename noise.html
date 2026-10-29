@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How far to trust a detection · How Talos sees</title>
+<meta name="description" content="The covariance riptide_mapping gives every detection: range-dependent stereo depth error along the camera ray, bearing error across it, a timing smear while Talos moves, and the inflation that stops back-to-back frames from counting as independent.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23d9480f'/></svg>">
+</head>
+<body>
+<main>
+  <header class="page-head">
+    <div class="kicker">Chapter 4</div>
+    <h1>How far to trust a detection</h1>
+    <p class="lede">The detector says where an object is. It doesn't say how sure it is. Mapping fills that in with a noise model: a covariance for every detection that depends on how far away the object was, which way the camera was looking, and how fast Talos was moving when the frame was taken.</p>
+  </header>
+  <article>
+    <div class="prose">
+      <p>A <code>Detection3D</code> from <code>tensor_detector</code> carries a class, a confidence score and a pose in the camera's optical frame. Its covariance fields are left at zero. To fuse detections with a Kalman filter (Chapter 5), mapping needs to know how much each one should move the estimate, and that is what a measurement covariance <span class="m">\Rm</span> encodes. A detection 80 cm away is worth far more than one 5 m away, and a frame grabbed mid-turn is worth less than one taken while holding still.</p>
+      <p>The model is one function, <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L130"><code>detection_covariance</code></a> in <code>map_estimator.py</code>, called from <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/mapping.py#L753"><code>update_object_with_pose</code></a> for every detection mapping fuses. Its parameters live under <code>noise:</code> in <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/config/config.yaml#L46"><code>config/config.yaml</code></a>. Every figure on this page calls the browser's copy of that function.</p>
+
+      <h2 id="model">The noise model</h2>
+      <p>Split a stereo measurement into two directions: <strong>along the camera ray</strong>, which is the depth the stereo match measured, and <strong>across it</strong>, which is the bearing, where on the image the object sat. They fail differently, so the model gives each its own standard deviation. With <span class="m">r</span> the detection's distance from the camera:</p>
+      <div class="M">\sigma_\perp = b + k_\perp\, r, \qquad \sigma_\parallel = b + k_\parallel\, r + k_2\, r^2</div>
+      <p>The base term <span class="m">b</span> = 1 cm is error any detection has, however close. Across the ray, a bearing error of a fixed angle becomes a sideways distance proportional to range, so <span class="m">k_\perp</span> = 0.003 m per m: a bearing error of 3 milliradians (0.17°, about five pixels at Nereus's focal length), mostly from where the mask's edges fall. Along the ray, depth gets both a linear term, <span class="m">k_\parallel</span> = 0.008 m per m, and a quadratic one, <span class="m">k_2</span> = 0.003 m per m².</p>
+
+      <h3 id="stereo">Why depth error grows with the square of range</h3>
+      <p>A stereo camera doesn't measure depth directly. It measures <strong>disparity</strong>: how many pixels a point shifts between the left and right images. With focal length <span class="m">f</span> in pixels and baseline <span class="m">B</span> between the two lenses, depth is <span class="m">z = fB/d</span>. Differentiate it and a fixed matching error <span class="m">\delta d</span> becomes</p>
+      <div class="M">\delta z = \frac{z^2}{f B}\,\delta d</div>
+      <p>so depth error grows with the square of range. The ZED X Mini has a 50 mm baseline, and in Nereus the cameras render at 1920×1200 with <span class="m">f</span> = 1864 px, so <span class="m">fB</span> ≈ 93 px·m. One pixel of disparity error at 2 m is 4.3 cm of depth. The model's <span class="m">k_2</span> = 0.003 m per m² corresponds to matching to about a quarter of a pixel. The detector then averages up to 500 sampled points over the object's mask before it reports a depth (Chapter 2), which shrinks independent pixel noise. It doesn't shrink errors the points share, though, such as a depth map that is a little off everywhere on a surface.</p>
+
+      <h3 id="timing">Motion turns timing error into position error</h3>
+      <p>A detection is stamped with its image's capture time, and mapping looks up the camera's pose at that stamp in TF to put the detection in the world. If the stamp and the pose disagree by <span class="m">\delta t</span>, the detection lands where the camera would have put it <span class="m">\delta t</span> earlier or later. While Talos turns at <span class="m">\omega</span>, that swings it sideways by <span class="m">\omega\,\delta t\, r</span>. While it moves at <span class="m">v</span>, everything shifts by <span class="m">v\,\delta t</span>. The model adds both with <span class="m">t_s</span> = 0.03 s, the assumed stamp error:</p>
+      <div class="M" data-narrow="\begin{aligned} \sigma_\perp^2 &amp;\mathrel{+}= (\omega\, t_s\, r)^2 \\ \Rm_\text{cam} &amp;\mathrel{+}= (v\, t_s)^2 I \end{aligned}">\sigma_\perp^2 \mathrel{+}= (\omega\, t_s\, r)^2, \qquad \Rm_\text{cam} \mathrel{+}= (v\, t_s)^2\, I</div>
+      <p>The rates come from odometry. Mapping keeps the last 200 odometry messages as (stamp, |ω|, |v|) and uses the one nearest the detection's stamp (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/mapping.py#L914"><code>motion_at</code></a>). Turning matters far more than moving: at 0.5 rad/s, an object 3 m away gets 4.5 cm of extra sideways error, more than twice its at-rest bearing error and most of its 6.1 cm depth error. Driving at 0.3 m/s adds 9 mm in every direction.</p>
+
+      <h3 id="assembly">Putting it together</h3>
+      <p>With <span class="m">\hat u = \bp_\text{cam}/r</span> the unit ray to the detection, the covariance in the camera frame is the lateral variance in every direction, with the ray direction replaced by the along-ray variance. Mapping then rotates it into the frame the object is estimated in (<code>map</code> for a course prop, <code>torpedo_frame</code> for a torpedo hole), using the same TF rotation <span class="m">\Rm_{pc}</span> that moved the detection there:</p>
+      <div class="M" data-narrow="\begin{aligned} \Rm_\text{cam} &amp;= \sigma_\perp^2 I + (\sigma_\parallel^2 - \sigma_\perp^2)\,\hat u \hat u^\top + (v t_s)^2 I \\ \Rm &amp;= \Rm_{pc}\, \Rm_\text{cam}\, \Rm_{pc}^\top \end{aligned}">\Rm_\text{cam} = \sigma_\perp^2 I + (\sigma_\parallel^2 - \sigma_\perp^2)\,\hat u \hat u^\top + (v t_s)^2 I, \qquad \Rm = \Rm_{pc}\, \Rm_\text{cam}\, \Rm_{pc}^\top</div>
+      <p>The result is an ellipsoid, a cigar along the line of sight that fattens sideways while Talos turns. Drag the detection below to see it from above.</p>
+    </div>
+    <figure class="fig">
+      <div class="panel">
+        <div class="controls" id="ell-controls"></div>
+        <div class="noise-wrap"><canvas id="ell-canvas" aria-label="Top-down view of a detection's covariance ellipse"></canvas></div>
+        <div class="noise-readout" id="ell-readout"></div>
+      </div>
+      <figcaption><b>One detection's covariance, from above.</b> The camera sits at the bottom, looking up the page, and the shaded wedge is the forward camera's field of view in Nereus. Drag the orange point (or tap anywhere) to move the detection. The inner ellipse is 1σ and the outer is 2σ, both drawn larger than life, by the factor shown, so they're visible at this scale. Turn up the yaw rate and the ellipse fattens across the ray; speed inflates it in every direction.</figcaption>
+    </figure>
+    <div class="prose">
+      <p>The same numbers as curves. At rest the along-ray error passes the across-ray error at once and keeps pulling away: by 4 m depth is four times worse than bearing. That shape is why a detection taken off to the side pins an object's position along a direction the one from straight ahead couldn't, and why the filter in Chapter 5 weighs each detection's ellipse rather than a single number.</p>
+    </div>
+    <figure class="fig narrow">
+      <div class="panel" id="range-chart"></div>
+      <figcaption><b>Standard deviation against range.</b> Along the ray (stereo depth), across it at rest, and across it while yawing at 0.5 rad/s, from <code>detection_covariance</code> with the config defaults. Tap or hover for values.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h3 id="origin">Where the numbers came from</h3>
+      <p>These defaults weren't fit to data. The config comment says so: <em>"From the old thresholds (the holes' 0.0005 needed under ~2 cm of scatter at 1.5 m); measure the real scatter to tune."</em> The behavior trees were written against the previous mapping, which published the spread of a buffer of recent detections as its covariance. The torpedo task, for example, waited for its holes' variance to fall under 0.0005 m², a standard deviation of 2.2 cm. The new noise model was set so the new filter passes those same checks after a similar amount of looking. At 1.5 m the model gives 2.9 cm along the ray and 1.5 cm across it.</p>
+      <p>The right way to set them is to measure. Hold Talos still in front of a prop, record detections, and compare their scatter with the curves at that range, then repeat at a few ranges and while turning. The figure below does that in Nereus.</p>
+    </div>
+    <figure class="fig narrow" id="measured-scatter">
+      <div class="panel"><div id="measured-chart"></div></div>
+      <figcaption><b>Measured in Nereus against the model.</b> Talos held still by the MPC in front of the torpedo board at 1.5, 2, 3 and 4 m for 15 s each, about 150 detections per object per hold at 10 Hz. Dots: the standard deviation of the torpedo and its four holes about their mean, in the map frame (so the robot's own slight motion drops out), along the camera ray and across it. Lines: what <code>detection_covariance</code> assumes. Beyond 4 m the detector no longer found the board. Tap or hover for values.</figcaption>
+    </figure>
+    <div class="prose">
+      <p>The simulator's detections scatter about ten times less than the model allows: half a centimetre along the ray at 4 m where the model assumes 8.7. That is not evidence the model is too cautious on the robot. Nereus renders depth from its own geometry with mild noise, without the stereo matcher's failures on low-texture water and pool walls, and a 15 s hold only measures the error that changes from frame to frame. The errors that stay put for seconds, like a centroid biased by a partly hidden board or a camera calibration slightly off, never show up as scatter, and the noise model has to cover them too. The way to tune <code>noise.*</code> for the robot is the same experiment on the robot: hold in front of a prop at a few ranges, with the same script.</p>
+    </div>
+
+    <div class="prose">
+      <h2 id="inflation">Back-to-back detections aren't independent</h2>
+      <p>A Kalman filter assumes every measurement's error is fresh. Camera frames aren't like that. Two frames 100 ms apart see the same water, the same lighting, almost the same viewpoint, and very nearly the same depth-map error, so their errors are mostly shared. Treat ten frames per second as ten independent measurements and the filter becomes overconfident within a second. Its covariance shrinks far below the real error, the gate in Chapter 5 starts rejecting good detections, and covariance checks in autonomy pass on what is really one view.</p>
+      <p>Mapping handles this per object (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L308"><code>inflation</code></a>): a detection that arrives <span class="m">\Delta t</span> after the last accepted one of the same object has its covariance scaled up by</p>
+      <div class="M">\Rm \leftarrow \Rm \cdot \min\!\Big(\max\!\big(1,\ \tfrac{\tau}{\Delta t}\big),\ 30\Big), \qquad \tau = 0.3\ \text{s}</div>
+      <p>Detections more than 0.3 s apart count fully. Closer ones count for <span class="m">\Delta t/\tau</span> of a detection each. The cap of 30 covers several detections of one object in the same frame (<span class="m">\Delta t</span> is floored at 1 ms, so they'd otherwise get 300).</p>
+      <p>The consequence is worth spelling out. Information is the inverse of variance, and the filter adds it up. Above <span class="m">1/\tau</span> ≈ 3.3 Hz, each detection brings <span class="m">\Delta t/(\tau\sigma^2)</span> of it, and detections arrive every <span class="m">\Delta t</span>, so the information rate is <span class="m">1/(\tau\sigma^2)</span> per second <strong>whatever the frame rate</strong>. Running the detector at 30 Hz instead of 10 doesn't make the estimate converge any faster. Only time spent looking does, or a better viewpoint (smaller <span class="m">\sigma</span>). Below 3.3 Hz every detection counts in full, so a slow detector loses information it never had.</p>
+    </div>
+    <figure class="fig narrow">
+      <div class="panel">
+        <div class="controls" id="inf-controls"></div>
+        <div id="inf-chart"></div>
+      </div>
+      <figcaption><b>How fast the estimate tightens.</b> The real estimator fusing detections of one prop at 1.5 m, straight ahead, at the chosen frame rate. It plots the estimate's standard deviation along the ray against seconds of looking, with the inflation as mapping runs it and with the inflation turned off. Without inflation, more frames per second always look like more certainty. With it, every rate above 3.3 Hz lands on the same curve.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h2 id="yaw">Yaw</h2>
+      <p>Objects also have a heading, estimated by a separate scalar filter per object. The detector reports a surface normal as the detection's +z axis, and mapping takes its heading in the parent frame, <span class="m">\psi = \operatorname{atan2}(n_y, n_x)</span> (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/mapping.py#L786"><code>mapping.py</code></a>), with a fixed 3° standard deviation (<code>noise.yaw_std_deg</code>). Unlike position, it doesn't grow with range, even though a plane fit over fewer, noisier points far away is worse. The same correlation inflation applies. Objects with <code>lock_orientation_to_config</code> (the slalom, the bin targets) ignore detected yaw entirely and keep the layout's.</p>
+
+      <h2 id="limits">What the model leaves out</h2>
+      <ul>
+        <li><strong>Bias.</strong> A covariance describes scatter, not offset. If the mask's edge consistently bleeds onto the background or the depth map reads 2 % long, every detection is wrong in the same direction, and averaging won't remove it. The covariance keeps shrinking regardless.</li>
+        <li><strong>Correlation between objects.</strong> Two objects seen in the same frame share that frame's camera-pose error. Each object's filter treats its own detections as unrelated to the other's.</li>
+        <li><strong>Viewing angle.</strong> A board seen edge-on gives a worse plane fit and a worse centroid than one seen face-on. The model only knows range and motion.</li>
+        <li><strong>Wrong-class detections</strong> aren't noise at all. A slalom pole labeled as part of the gate is a different object, and no covariance makes it right. Chapter 5's gate and agreement rules and the target lists (Chapter 7) handle those.</li>
+      </ul>
+      <p>None of these is fatal. The gate, the acquisition rules and the course map are all designed to cope with a covariance that is roughly right rather than exact. They do mean a tight covariance should be read as "seen consistently", which isn't always the same as "seen correctly".</p>
+    </div>
+    <nav class="next" aria-label="Chapter navigation"></nav>
+  </article>
+</main>
+<script type="module" src="/src/pages/noise.js"></script>
+</body>
+</html>

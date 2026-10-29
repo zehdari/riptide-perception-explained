@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The math in one place · How Talos sees</title>
+<meta name="description" content="Every equation of riptide_perception on one page: back-projection, the depth gate, the plane fit, the torpedo board geometry, the detection noise model, the per-object Kalman filter, acquisition by agreement and the robust course-map solve, with Talos's parameters.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23d9480f'/></svg>">
+</head>
+<body>
+<main class="sheet">
+  <header class="page-head">
+    <div class="kicker">Appendix A</div>
+    <h1>The math in one place</h1>
+    <p class="lede">Every equation the detector and mapping run, in the order a detection meets them, with Talos's parameters. Nothing here is new: each block links back to the chapter that explains it.</p>
+  </header>
+  <article>
+    <div class="prose">
+      <h2 id="notation">Notation</h2>
+      <p>Camera optical frame: <span class="m">z</span> forward along the lens axis, <span class="m">x</span> right, <span class="m">y</span> down. The <code>map</code> frame is the course frame: <span class="m">z</span> up, the water surface at <span class="m">z = 0</span>. Odometry positions are in <code>map</code> too, so "where the course sits in odometry" is an offset between the prior layout and what the cameras find.</p>
+      <table class="params notation">
+        <thead><tr><th>Symbol</th><th>Meaning</th><th>Size, frame</th></tr></thead>
+        <tbody>
+          <tr><td><span class="m">(u, v)</span></td><td>pixel column and row</td><td>image</td></tr>
+          <tr><td><span class="m">f_x, f_y, c_x, c_y</span></td><td>camera intrinsics, <span class="m">K</span></td><td>px</td></tr>
+          <tr><td><span class="m">\bp_i</span></td><td>a back-projected sample point</td><td><span class="m">\R^3</span>, camera</td></tr>
+          <tr><td><span class="m">\bn</span></td><td>fitted surface normal, facing the camera</td><td>unit, camera</td></tr>
+          <tr><td><span class="m">r,\ \hat u</span></td><td>range to a detection, unit ray to it</td><td>m, camera</td></tr>
+          <tr><td><span class="m">\bz,\ \Rm</span></td><td>one detection and its covariance</td><td><span class="m">\R^3</span>, object's parent frame</td></tr>
+          <tr><td><span class="m">\hat\bx,\ \P</span></td><td>an object's track: mean and covariance</td><td><span class="m">\R^3</span>, parent frame</td></tr>
+          <tr><td><span class="m">\bp_i^{\,0}</span></td><td>prior (layout) position of map object <span class="m">i</span></td><td><span class="m">\R^3</span>, map</td></tr>
+          <tr><td><span class="m">\bo_k</span></td><td>where the course sits in odometry, at fix <span class="m">k</span></td><td><span class="m">\R^3</span>, map</td></tr>
+          <tr><td><span class="m">\bd_i</span></td><td>layout deviation of object <span class="m">i</span></td><td><span class="m">\R^3</span>, map</td></tr>
+          <tr><td><span class="m">\psi</span></td><td>course yaw: heading error of the whole layout</td><td>rad</td></tr>
+          <tr><td><span class="m">s,\ t</span></td><td>odometry path length and time</td><td>m, s</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="pose">A mask becomes a pose</h2>
+      <p class="from">From <a href="pose.html">Chapter 2</a>.</p>
+      <p>Grid-sample the mask every 8 px (at most 500 samples) and back-project each through its depth <span class="m">z</span>:</p>
+      <div class="M">x = \frac{(u - c_x)\, z}{f_x}, \qquad y = \frac{(v - c_y)\, z}{f_y}, \qquad \bp = (x,\, y,\, z)</div>
+      <p>Keep the points whose depth is within three robust standard deviations of the median (the depth gate):</p>
+      <div class="M">m = \operatorname{median}(z_i), \qquad s = \max\!\big(1.4826\,\operatorname{median}|z_i - m|,\; 0.05\ \text{m}\big), \qquad \text{keep } |z_i - m| \le 3\,s</div>
+      <p>then a radius pass (more than <span class="m">\min(10, 0.8n)</span> neighbours within 1 m) and a statistical pass (mean distance to the <span class="m">k</span> nearest neighbours below the mean plus one standard deviation). The plane is the direction of least spread of what is left:</p>
+      <div class="M">\bar\bp = \frac1n \sum_i \bp_i, \qquad \begin{bmatrix} (\bp_1 - \bar\bp)^\top \\ \vdots \\ (\bp_n - \bar\bp)^\top \end{bmatrix} = U \Sigma V^\top, \qquad \bn = V_{:,3}, \quad \bn \leftarrow -\bn \text{ if } n_z > 0</div>
+      <p>The published position is the box centre <span class="m">(u_b, v_b)</span> back-projected at the points' mean depth, and the orientation puts body <span class="m">+z</span> on the normal:</p>
+      <div class="M">\mathbf c = \Big(\tfrac{(u_b - c_x)\, \bar z}{f_x},\; \tfrac{(v_b - c_y)\, \bar z}{f_y},\; \bar z\Big), \qquad R = \big[\, \mathbf e_1 \;\; \mathbf e_2 \;\; \bn \,\big], \quad \mathbf e_1 = \frac{\bn \times \mathbf a}{\lVert \bn \times \mathbf a \rVert},\ \mathbf e_2 = \bn \times \mathbf e_1</div>
+      <p class="eq-note"><span class="m">\mathbf a</span> is the camera <span class="m">x</span> axis, or <span class="m">y</span> when the normal is within 26° of <span class="m">x</span>; the first column is negated if <span class="m">\det R &lt; 0</span>.</p>
+
+      <h2 id="composites">The torpedo board</h2>
+      <p class="from">From <a href="composites.html">Chapter 3</a>.</p>
+      <p>One plane is fitted to the pooled points of every symbol on the board (fire and blood required, ambulance and fire engine optional), anchored at the mean symbol centroid <span class="m">\mathbf a</span>. Each symbol and circle centre is then intersected with that plane along its camera ray:</p>
+      <div class="M">\mathbf d = \frac{K^{-1}(u, v, 1)^\top}{\lVert K^{-1}(u, v, 1)^\top \rVert}, \qquad t = \frac{\bn \cdot \mathbf a}{\bn \cdot \mathbf d}, \qquad \mathbf p = t\,\mathbf d</div>
+      <p>With an in-plane basis <span class="m">(\mathbf e_u, \mathbf e_v)</span>, the board centre is the middle of the projected points' extent, and the four holes split two and two along the fire-to-blood axis:</p>
+      <div class="M">\mathbf c = \mathbf p_0 + \tfrac12\big(\min_j u_j + \max_j u_j\big)\,\mathbf e_u + \tfrac12\big(\min_j v_j + \max_j v_j\big)\,\mathbf e_v, \qquad s_h = (\mathbf p_h - \mathbf p_\text{fire}) \cdot \frac{\mathbf p_\text{blood} - \mathbf p_\text{fire}}{\lVert \mathbf p_\text{blood} - \mathbf p_\text{fire} \rVert}</div>
+      <p class="eq-note">The two smallest <span class="m">s_h</span> are fire's holes; of each pair, the one nearer its symbol is the large hole.</p>
+
+      <h2 id="noise">How much a detection is worth</h2>
+      <p class="from">From <a href="noise.html">Chapter 4</a>.</p>
+      <p>Standard deviation across the camera ray and along it, at range <span class="m">r</span>, with the vehicle turning at <span class="m">\omega</span> and moving at <span class="m">v</span> and a stamp error <span class="m">t_s</span>:</p>
+      <div class="M">\sigma_\perp^2 = (b + k_\perp r)^2 + (\omega\, t_s\, r)^2, \qquad \sigma_\parallel = b + k_\parallel\, r + k_2\, r^2</div>
+      <div class="M">\Rm_\text{cam} = \sigma_\perp^2 I + (\sigma_\parallel^2 - \sigma_\perp^2)\,\hat u \hat u^\top + (v t_s)^2 I, \qquad \Rm = \Rm_{pc}\, \Rm_\text{cam}\, \Rm_{pc}^\top</div>
+      <p>where <span class="m">\Rm_{pc}</span> rotates the camera frame into the object's parent frame. A detection <span class="m">\Delta t</span> after the object's last accepted one shares most of its error, so</p>
+      <div class="M">\Rm \leftarrow \Rm \cdot \min\!\Big(\max\!\big(1,\ \tfrac{\tau}{\Delta t}\big),\ 30\Big), \qquad \Delta t \ge 1\ \text{ms}</div>
+      <p>Detected yaw is the heading of the normal in the parent frame, <span class="m">\operatorname{atan2}(n_y, n_x)</span>, with a fixed 3° standard deviation, inflated the same way.</p>
+
+      <h2 id="tracking">Tracking one object</h2>
+      <p class="from">From <a href="tracking.html">Chapter 5</a>.</p>
+      <p>A three-state Kalman update in the object's parent frame, in Joseph form:</p>
+      <div class="M" data-narrow="\begin{gathered} \boldsymbol\nu = \bz - \hat\bx, \quad \mathbf S = \P + \Rm, \quad \K = \P\mathbf S^{-1} \\[6pt] \hat\bx \leftarrow \hat\bx + \K\boldsymbol\nu, \qquad \P \leftarrow (I - \K)\,\P\,(I - \K)^\top + \K\Rm\K^\top \end{gathered}">\boldsymbol\nu = \bz - \hat\bx, \quad \mathbf S = \P + \Rm, \quad \K = \P\mathbf S^{-1}, \qquad \hat\bx \leftarrow \hat\bx + \K\boldsymbol\nu, \qquad \P \leftarrow (I - \K)\,\P\,(I - \K)^\top + \K\Rm\K^\top</div>
+      <p>Once the track has 10 accepted detections, a detection is rejected when</p>
+      <div class="M">\boldsymbol\nu^\top \mathbf S^{-1} \boldsymbol\nu \;>\; 16.27 \;=\; \chi^2_3(0.999)</div>
+      <p>and 30 rejections in a row restart the track. Yaw is a scalar filter on the wrapped innovation <span class="m">\operatorname{wrap}(\psi_z - \hat\psi)</span>, gated at <span class="m">\chi^2_1(0.999) = 10.83</span>. A map object's track ages between sightings by the odometry drift since it was last seen, <span class="m">\P \leftarrow \P + \Q(\Delta s, \Delta t)</span> (below).</p>
+      <p><strong>Acquisition.</strong> Until a track has accepted a detection, detections are held for 4 s. Two agree when</p>
+      <div class="M">\lVert \bz_a - \bz_b \rVert \;\le\; \max\!\Big(0.3\ \text{m},\ 3\sqrt{\lambda_\text{max}(\Rm_a + \Rm_b)}\Big)</div>
+      <p>The largest group of detections that agree with one member starts the track once it has 4 members. It needs 12, spanning at least 2 s, when its mean <span class="m">\bar\bz</span> is far from where the map expects the object:</p>
+      <div class="M">(\bar\bz - \hat\bp)^\top \Big(\boldsymbol\Sigma_{\hat\bp} + \tfrac1m \textstyle\sum_{j} \Rm_j\Big)^{-1} (\bar\bz - \hat\bp) \;>\; 16.27</div>
+
+      <h2 id="map">The course map</h2>
+      <p class="from">From <a href="map.html">Chapter 6</a>.</p>
+      <p>Every map-parented object is the prior layout, turned by the course yaw, plus where the course sits in odometry, plus that object's own layout error:</p>
+      <div class="M">\bp_i = \Rm(\psi)\,\bp_i^{\,0} + \bo + \bd_i</div>
+      <p>The offset random-walks with distance travelled and time:</p>
+      <div class="M">\Q(\Delta s, \Delta t) = \operatorname{diag}\big(q_{s}\Delta s + q_{t}\Delta t,\ \ q_{s}\Delta s + q_{t}\Delta t,\ \ q_{s,z}\Delta s + q_{t,z}\Delta t\big)</div>
+      <p>A track with 10 detections becomes a <strong>fix</strong> <span class="m">(\bz_k, \P_k)</span> at the path length <span class="m">s_k</span> it was last seen. Two fixes of one object less than 1 m of travel apart merge:</p>
+      <div class="M">\P = \left(\P_a^{-1} + \P_b^{-1}\right)^{-1}, \qquad \bz = \P\left(\P_a^{-1}\bz_a + \P_b^{-1}\bz_b\right)</div>
+      <p>With the fixes sorted by path length, one offset node per fix, one deviation per object seen, and the course yaw, the solve minimizes</p>
+      <div class="M" data-narrow="\begin{aligned} J =\;&amp; \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - \Rm(\psi)\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} \\ &amp;+ \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} \\ &amp;+ \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right) \end{aligned}">J = \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - \Rm(\psi)\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} + \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} + \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right)</div>
+      <p class="eq-note"><span class="m">\Q_k</span> is the drift between consecutive fixes (plus <span class="m">10^{-6}</span> on the diagonal), <span class="m">\Q_1</span> the drift up to the first, <span class="m">\boldsymbol\Sigma_o</span> the offset's start prior and <span class="m">\boldsymbol\Sigma_L</span> the layout prior.</p>
+      <p>The layout term is Cauchy-robust, solved by iteratively reweighted least squares (the rotation linearized about the current <span class="m">\psi</span> each pass):</p>
+      <div class="M">\rho(r^2) = s^2 \log\!\left(1 + \frac{r^2}{s^2}\right), \qquad w(r^2) = \frac{1}{1 + r^2/s^2}, \qquad s = 2</div>
+      <p>A new set of fixes is solved from zero, from every start that blames one prior (its weight set to 0 for the first pass), and from the last answer; the lowest <span class="m">J</span> wins. An object with <span class="m">w &lt; 0.5</span> is <strong>released</strong>. Every object's estimate, seen or not, is then</p>
+      <div class="M" data-narrow="\begin{gathered} \hat\bp_i = \Rm(\hat\psi)\,\bp_i^{\,0} + \hat\bo + \hat\bd_i \\[6pt] \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L \text{ if unseen}\big] \end{gathered}">\hat\bp_i = \Rm(\hat\psi)\,\bp_i^{\,0} + \hat\bo + \hat\bd_i, \qquad \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L \text{ if unseen}\big]</div>
+      <p class="eq-note"><span class="m">\mathbf A</span> is the normal matrix at the solution, <span class="m">\mathbf J = [\,\partial \Rm(\psi)\bp^{\,0}_i/\partial\psi \;\; I \;\; I\,]</span>, and <span class="m">\Delta s, \Delta t</span> the travel since the newest fix.</p>
+
+      <h2 id="published">What is published</h2>
+      <p class="from">From <a href="frames.html">Chapter 7</a>.</p>
+      <p>Until an object is confirmed by fresh detections while targeted (10, or 3 that agree with a known estimate), its published covariance is floored:</p>
+      <div class="M">\boldsymbol\Sigma_\text{pub} = \boldsymbol\Sigma + \operatorname{diag}\big(\max(1 - \Sigma_{jj},\ 0)\big), \qquad \sigma^2_{\text{roll}} = \sigma^2_{\text{pitch}} = 0.1, \qquad \sigma^2_\text{yaw} \ge 0.1</div>
+
+      <h2 id="params">Talos's parameters</h2>
+      <p class="from">From <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/config/config.yaml"><code>riptide_mapping/config/config.yaml</code></a> and <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/config/yolo_orientation.yaml"><code>tensor_detector/config/yolo_orientation.yaml</code></a>.</p>
+      <table class="params">
+        <thead><tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="3">Detector</td></tr>
+          <tr><td><code>ffc_threshold</code>, <code>ffc_iou</code></td><td>0.65, 0.7</td><td>forward model: confidence and NMS overlap</td></tr>
+          <tr><td><code>dfc_threshold</code>, <code>dfc_iou</code></td><td>0.8, 0.9</td><td>downward model</td></tr>
+          <tr><td><code>grid_step</code>, <code>max_sample_points</code></td><td>8 px, 500</td><td>mask sampling</td></tr>
+          <tr><td><code>depth_mad_scale</code>, <code>depth_min_spread</code></td><td>3, 0.05 m</td><td>depth gate</td></tr>
+          <tr><td><code>min_points</code></td><td>5</td><td>fewest points for a plane</td></tr>
+          <tr><td><code>max_depth_age</code>, <code>depth_buffer_size</code></td><td>1 s, 15</td><td>image–depth pairing</td></tr>
+          <tr class="group"><td colspan="3">Detection noise (<code>noise.*</code>)</td></tr>
+          <tr><td><code>base_std</code> <span class="m">b</span></td><td>0.01 m</td><td>any detection</td></tr>
+          <tr><td><code>lateral_std_per_m</code> <span class="m">k_\perp</span></td><td>0.003</td><td>across the ray, per m of range</td></tr>
+          <tr><td><code>range_std_per_m</code>, <code>_per_m2</code> <span class="m">k_\parallel, k_2</span></td><td>0.008, 0.003 m⁻¹</td><td>along the ray</td></tr>
+          <tr><td><code>timing_std</code> <span class="m">t_s</span></td><td>0.03 s</td><td>stamp vs pose error</td></tr>
+          <tr><td><code>yaw_std_deg</code></td><td>3°</td><td>detected yaw</td></tr>
+          <tr><td><code>correlation_time</code> <span class="m">\tau</span>, <code>max_inflation</code></td><td>0.3 s, 30</td><td>back-to-back detections</td></tr>
+          <tr class="group"><td colspan="3">Estimator (<code>estimator.*</code>)</td></tr>
+          <tr><td><code>offset_std_xy</code>, <code>_z</code> <span class="m">\boldsymbol\Sigma_o</span></td><td>1.0, 0.3 m</td><td>where the course sits at the start</td></tr>
+          <tr><td><code>drift_var_per_m_xy</code>, <code>_z</code> <span class="m">q_s</span></td><td>0.002, 0.0002 m²/m</td><td>odometry drift per metre</td></tr>
+          <tr><td><code>drift_var_per_s_xy</code>, <code>_z</code> <span class="m">q_t</span></td><td>1e-5, 1e-6 m²/s</td><td>drift while holding still</td></tr>
+          <tr><td><code>layout_std_xy</code>, <code>_z</code> <span class="m">\boldsymbol\Sigma_L</span></td><td>0.25, 0.15 m</td><td>how far a prop may be from the layout</td></tr>
+          <tr><td><code>layout_robust_scale</code> <span class="m">s</span></td><td>2</td><td>Cauchy scale, in layout σ</td></tr>
+          <tr><td><code>course_yaw_std_deg</code> <span class="m">\sigma_\psi</span></td><td>2°</td><td>heading error of the layout</td></tr>
+          <tr><td><code>fix_merge_distance</code></td><td>1 m</td><td>sightings this close in travel merge</td></tr>
+          <tr><td><code>child_std_xy</code>, <code>_z</code></td><td>0.5, 0.3 m</td><td>prior of an object in another object's frame</td></tr>
+          <tr><td><code>yaw_std_deg</code></td><td>30°</td><td>prior on every object's yaw</td></tr>
+          <tr><td><code>gate_chi2</code>, <code>yaw_gate_chi2</code></td><td>16.27, 10.83</td><td>rejection gates, 99.9 %</td></tr>
+          <tr><td><code>gate_min_updates</code></td><td>10</td><td>detections before the gate, and before a track is a fix</td></tr>
+          <tr><td><code>gate_max_rejects</code></td><td>30</td><td>rejections in a row that restart a track</td></tr>
+          <tr><td><code>confirm_detections</code>, <code>verify_detections</code></td><td>10, 3</td><td>detections while targeted to confirm</td></tr>
+          <tr><td><code>acquire_detections</code>, <code>acquire_radius_m</code>, <code>acquire_window_s</code></td><td>4, 0.3 m, 4 s</td><td>agreement before a track starts</td></tr>
+          <tr><td><code>acquire_prior_chi2</code>, <code>acquire_far_detections</code>, <code>acquire_far_s</code></td><td>16.27, 12, 2 s</td><td>agreement far from the map's estimate</td></tr>
+          <tr class="group"><td colspan="3">Binary classifier (<code>binary_classifier.*</code>, the bins)</td></tr>
+          <tr><td><code>min_cluster_detections</code>, <code>cluster_radius_m</code></td><td>6, 0.15 m</td><td>to lock an instance</td></tr>
+          <tr><td><code>assignment_gate_m</code></td><td>0.20 m</td><td>a locked instance's gate</td></tr>
+          <tr><td><code>exclusion_radius_m</code>, <code>min_instance_separation_m</code></td><td>0.30, 0.40 m</td><td>keep the second instance apart</td></tr>
+          <tr><td><code>max_cluster_variance_m2</code>, <code>centroid_ema_alpha</code></td><td>0.02 m², 0.15</td><td>cluster spread, centroid smoothing</td></tr>
+          <tr><td><code>buffer_ttl_sec</code>, <code>buffer_size</code></td><td>8 s, 500</td><td>detections kept for clustering</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <nav class="next" aria-label="Chapter navigation"></nav>
+  </article>
+</main>
+<script type="module" src="/src/pages/math.js"></script>
+</body>
+</html>

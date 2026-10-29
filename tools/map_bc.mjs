@@ -1,0 +1,26 @@
+import { chromium } from 'playwright';
+const [url, out, w = 1400, h = 900] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome' });
+const page = await browser.newPage({ viewport: { width: +w, height: +h } });
+const errors = [];
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.text()); });
+page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
+await page.goto(url, { waitUntil: 'networkidle' });
+const fig = page.locator('#bc-canvas');
+await fig.scrollIntoViewIfNeeded();
+await page.getByRole('button', { name: 'Start', exact: true }).click();
+await page.waitForTimeout(2500);
+await page.getByRole('button', { name: 'Freeze buffer' }).click();
+// move camera to cover both vinyls before freeze? drag the camera over the second vinyl
+const box = await fig.boundingBox();
+const k = box.width / 2.5;
+const toPx = (x, y) => [box.x + (x + 1.25) * k, box.y + (0.95 - y) * k];
+const [ax, ay] = toPx(0.187, 0.297), [bx, by] = toPx(-0.217, -0.347);
+await page.mouse.move(ax, ay); await page.mouse.down(); await page.mouse.move(bx, by, { steps: 10 }); await page.mouse.up();
+await page.waitForTimeout(1500);
+await page.getByRole('button', { name: 'Start second' }).click();
+await page.waitForTimeout(3000);
+await page.locator('#bc-canvas').locator('xpath=ancestor::figure').screenshot({ path: out });
+console.log(errors.slice(0, 10).join('\n') || 'no console errors');
+console.log(await page.locator('#bc-status').innerText());
+await browser.close();

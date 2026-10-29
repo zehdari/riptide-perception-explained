@@ -1,0 +1,5 @@
+.noise-wrap { position: relative; }
+.noise-wrap canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; border-radius: 6px; background: var(--paper); }
+.noise-readout { display: flex; flex-wrap: wrap; gap: 0.3rem 1.4rem; font-family: var(--sans); font-size: 0.84rem; color: var(--ink-2); margin-top: 0.6rem; font-variant-numeric: tabular-nums; }
+.noise-readout b { color: var(--ink); font-weight: 600; }
+.noise-note { font-family: var(--sans); font-size: 0.84rem; color: var(--ink-2); margin-top: 0.5rem; font-variant-numeric: tabular-nums; min-height: 1.3em; }

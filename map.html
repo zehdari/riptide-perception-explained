@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The course map · How Talos sees</title>
+<meta name="description" content="How riptide_mapping estimates where the whole RoboSub course sits in Talos's odometry: a prior layout, one drifting offset, per-prop deviations and a course yaw, solved robustly from every sighting.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23d9480f'/></svg>">
+</head>
+<body>
+<main>
+  <header class="page-head">
+    <div class="kicker">Chapter 6</div>
+    <h1>The course map</h1>
+    <p class="lede">Talos starts every run already knowing roughly where every prop is. Mapping's job is to work out how far that knowledge is off: one shift for the whole course, plus a small correction for each prop, estimated from every sighting so far.</p>
+  </header>
+  <article>
+    <div class="prose">
+      <p>Chapter 5 tracked one object from its detections. That alone would be enough if Talos only ever looked at what was in front of it. It isn't: autonomy drives to the torpedo board before the camera has seen it, so mapping has to say where the board is from what it knows about the gate and the slalom. This chapter is about that, the part of <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py"><code>map_estimator.py</code></a> that ties every map object together. The file has no ROS in it, so its unit tests (<code>test/test_map_estimator.py</code>) run it on their own, and the browser runs a JavaScript copy of it checked against the Python on recorded scenarios.</p>
+
+      <h2 id="why">Why a map at all</h2>
+      <p>Before a competition run the team measures the course: the gate, the slalom, the torpedo board, the bins and the table, each with a position and a heading. These go into <code>init_data</code> in mapping's <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/config/config.yaml"><code>config/config.yaml</code></a>. The config calls the layout <strong>dead-reckoned</strong>: the positions come from odometry, not a survey, so they are only as good as that odometry was on the day.</p>
+      <p>Then two things go wrong. During the run, Talos's own odometry (an EKF on the DVL, the fibre-optic gyro and the depth sensor) <strong>drifts</strong>: a few centimetres per ten metres, but it adds up over a course twenty metres long. And the layout itself is <strong>sometimes off</strong>: a prop was moved after it was measured, or the measurement was bad. The first error is shared by every prop. The second belongs to one prop. Mapping estimates both.</p>
+      <p>What mapping does not do is estimate Talos's own position. It trusts odometry over short distances and asks a narrower question: where does the course sit in the odometry frame right now? That is a few dozen numbers rather than a full SLAM problem, small enough to solve from scratch many times a second.</p>
+    </div>
+
+    <figure class="fig" id="course-fig">
+      <div class="panel">
+        <div class="controls" id="course-presets"></div>
+        <canvas id="course" class="map-canvas" aria-label="Top-down course map"></canvas>
+        <div class="controls map-fly" id="course-fly"></div>
+        <div id="course-readout" class="map-readout"></div>
+      </div>
+      <figcaption><b>The RoboSub 2026 course as Talos's config has it</b>, running the browser copy of mapping's estimator. Grey outlines are the priors from <code>init_data</code>. Dark shapes are where the props really are; drag their orange handles, or pick a preset, to move them. Then send Talos to a prop, or fly the whole course. Each sighting becomes a fix, and every prop's estimate moves, including the props Talos hasn't seen, which ride along on the offset. Ellipses are 2σ. A prop whose prior disagrees with the others is <em>released</em>.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h2 id="model">One shift for the course, one correction per prop</h2>
+      <p>Every map-parented object <span class="m">i</span> (the gate, the slalom, the torpedo board, the bins, the table and the waypoints between them) is modelled as its prior position, turned by a small course yaw, plus an offset shared by the whole course, plus a deviation of its own:</p>
+      <div class="M">\bp_i = \Rm(\psi)\,\bp_i^{\,0} + \bo + \bd_i</div>
+      <ul>
+        <li><span class="m">\bp_i^{\,0}</span> is the prior from <code>init_data</code>.</li>
+        <li><span class="m">\bo</span>, the <strong>offset</strong>, is where the course sits in the odometry frame: one 3-vector for the whole course. Mapping publishes it as the TF <code>map → offset</code>, and every map object's frame hangs off <code>offset</code>.</li>
+        <li><span class="m">\bd_i</span>, the <strong>deviation</strong>, is how far the layout is off for that one prop.</li>
+        <li><span class="m">\psi</span>, the <strong>course yaw</strong>, is a start-heading misalignment between the layout and odometry, a rotation about the map origin. The AprilTag calibration (Chapter 7) sets Talos's heading against the board on the wall, so it is small.</li>
+      </ul>
+      <p>Each gets a prior from the <code>estimator</code> block of the config:</p>
+      <table class="params">
+        <thead><tr><th>Quantity</th><th>Prior</th><th>Parameter</th></tr></thead>
+        <tbody>
+          <tr><td>Offset at the start</td><td>σ = 1.0 m in x, y; 0.3 m in z</td><td><code>offset_std_xy</code>, <code>offset_std_z</code></td></tr>
+          <tr><td>Offset drift</td><td>+0.002 m² per metre travelled, +10⁻⁵ m² per second (xy); a tenth of that in z</td><td><code>drift_var_per_m_xy</code>, <code>drift_var_per_s_xy</code></td></tr>
+          <tr><td>Deviation</td><td>σ = 0.25 m in x, y; 0.15 m in z, heavy-tailed</td><td><code>layout_std_xy</code>, <code>layout_std_z</code>, <code>layout_robust_scale</code> = 2</td></tr>
+          <tr><td>Course yaw</td><td>σ = 2°</td><td><code>course_yaw_std_deg</code></td></tr>
+        </tbody>
+      </table>
+      <p>The offset is a <strong>random walk in distance travelled</strong>: dead-reckoning error grows with how far Talos has moved, not with time, so its variance grows by 0.002 m² per metre. After the 20 m to the torpedo board that is σ ≈ 0.2 m on top of the start uncertainty; after the 60 m of a whole run, about 0.35 m. A small per-second term keeps it growing even while Talos holds station. Mapping measures distance by summing the steps between odometry messages and ignoring any jump over 1 m, which is a reset rather than travel (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/mapping.py#L900"><code>odom_callback</code></a>).</p>
+      <p>The deviation prior says layout errors are small: a quarter of a metre is typical. A prop that was moved by a metre is a different kind of mistake, and the next sections are about not letting one bad prop drag the whole map.</p>
+
+      <h2 id="fixes">From tracks to fixes</h2>
+      <p>The filter in Chapter 5 keeps one track per object in the odometry frame. Once a map object's track has <code>gate_min_updates</code> = 10 accepted detections, it becomes a <strong>fix</strong>: a measurement of where that object was, stamped with the odometry distance and time at which it was last seen (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L371"><code>observe</code></a>). While Talos keeps looking at the object, the fix is <em>live</em>: it improves with each detection and its distance stamp moves forward.</p>
+      <p>When autonomy retargets the object later (a new <code>mapping_target</code> call), the live fix is <strong>frozen</strong>: it stops changing and a new track starts from where the map has the object (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L475"><code>_freeze</code></a>). That is how a revisit measures drift. The gate seen at the start and the gate seen again on the way home are two fixes of the same object, taken 60 m of odometry apart. Same prop, same deviation, so whatever moved between them is the offset.</p>
+      <p>Two fixes of one object less than <code>fix_merge_distance</code> = 1 m of travel apart say the same thing and are merged, in information form, so retargeting the same prop over and over doesn't pile up near-duplicates:</p>
+      <div class="M">\P = \left(\P_a^{-1} + \P_b^{-1}\right)^{-1}, \qquad \bz = \P\left(\P_a^{-1}\bz_a + \P_b^{-1}\bz_b\right)</div>
+
+      <h2 id="solve">The solve</h2>
+      <p>Every time the fixes change, mapping solves for all the unknowns at once (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L488"><code>_solve</code></a>). The fixes are sorted by odometry distance, and each fix <span class="m">k</span> gets an offset node <span class="m">\bo_k</span> of its own: the offset at the moment that fix was taken. Each object that has a fix gets a deviation <span class="m">\bd_i</span>. With the course yaw, that is <span class="m">1 + 3K + 3N</span> unknowns for <span class="m">K</span> fixes of <span class="m">N</span> objects, around 40 on a full run.</p>
+      <p>The cost has four kinds of terms. Each fix <span class="m">\bz_k</span>, with covariance <span class="m">\P_k</span> from its track, should match the model; consecutive offset nodes should differ by no more than the drift between them, <span class="m">\Q_k = \Q(\Delta s_k, \Delta t_k)</span>; the first node is tied to the start prior; and the yaw and the deviations pay their priors:</p>
+      <div class="M" data-narrow="\begin{aligned} J =\;&amp; \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - \Rm(\psi)\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} \\ &amp;+ \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} \\ &amp;+ \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right) \end{aligned}">J = \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - \Rm(\psi)\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} + \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} + \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right)</div>
+      <p class="eq-note">‖v‖²<sub>W</sub> = vᵀWv. Σ<sub>o</sub> is the start-offset prior, Σ<sub>L</sub> the layout prior, Q(Δs, Δt) = diag(0.002 Δs + 10⁻⁵ Δt, …) the drift. ρ is the robust penalty of the next section.</p>
+      <p>Only the course yaw makes it nonlinear, through <span class="m">\Rm(\psi)</span>. The code linearizes it about the current guess, <span class="m">\Rm(\psi)\bp \approx \Rm(\hat\psi)\bp + \mathbf g\,(\psi - \hat\psi)</span> with <span class="m">\mathbf g = \partial(\Rm\bp)/\partial\psi</span>, builds the normal equations <span class="m">\mathbf A\bx = \mathbf b</span> and solves them with a dense solve, iterating until no unknown moves by more than 10⁻⁷ (at most 30 times). A 40×40 system is nothing to solve. The inverse of <span class="m">\mathbf A</span> at the answer is the covariance of every unknown, and that is what makes the published covariances mean something.</p>
+    </div>
+
+    <figure class="fig narrow">
+      <div class="panel" id="factor-graph"></div>
+      <figcaption><b>What the solve connects</b> on a short run: the gate, then the slalom, then the gate again on the way back. Every fix ties one offset node to one deviation; the drift links the offset nodes in order of distance travelled; the course yaw touches every fix. Tap a node or a link.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <p>The current offset is the newest node, with the drift since that fix added to its covariance (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L247"><code>offset</code></a>). Every map object is then <strong>predicted</strong> from the solution (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L276"><code>_predicted</code></a>):</p>
+      <div class="M">\hat\bp_i = \Rm(\hat\psi)\,\bp_i^{\,0} + \hat\bo + \hat\bd_i, \qquad \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L\big]</div>
+      <p>For an object that has never been seen there is no <span class="m">\hat\bd_i</span>, so it gets the layout prior <span class="m">\boldsymbol\Sigma_L</span> added instead: an unseen prop is never surer than "where the layout says, moved with the course, give or take 25 cm". That is the estimate autonomy drives to before the camera has the prop.</p>
+
+      <h3 id="split">One sighting can't tell the two apart</h3>
+      <p>Suppose the first prop Talos sees, the gate, is 0.6 m from its prior. Either the course sits 0.6 m off in odometry, or the gate was measured wrong. One fix can't separate the two: <span class="m">\bo + \bd_\text{gate}</span> is all it constrains. The solve splits the difference by the priors. The offset is the more uncertain (σ = 1 m against 0.25 m), so about 94 % of the shift goes to the offset, and every other prop moves with it. That is the right call for the first prop: the start offset really is the bigger unknown.</p>
+      <p>The second prop settles it. If the slalom is also 0.6 m off in the same direction, the shift is the offset: two props explaining it with one shared vector is far cheaper than two deviations. If the slalom sits exactly on its prior, the gate's 0.6 m must be the gate's own, and the offset goes back. The figure below runs the estimator on three fixes; move the sliders and watch who gets the blame.</p>
+    </div>
+
+    <figure class="fig">
+      <div class="panel">
+        <div class="controls" id="blame-controls"></div>
+        <div class="cols map-blame">
+          <div id="blame-bars"></div>
+          <div id="blame-note" class="map-note"></div>
+        </div>
+      </div>
+      <figcaption><b>Who gets the blame.</b> Talos sees the gate, the slalom and the torpedo board in turn (20 m of travel), and the sliders set where they really are: a shift shared by all three (odometry), and an extra error in the torpedo's prior alone. Bars are the estimator's answer in x; ticks mark the truth. Untick a prop to leave it unseen.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h2 id="robust">A prop that disagrees is released</h2>
+      <p>If the deviation prior were Gaussian, a torpedo board placed 1.5 m from its prior would pull the offset, and with it every other prop, a good fraction of the way toward itself. Three props that agree would be overruled in part by one that doesn't. So the layout term is heavy-tailed. Instead of the squared Mahalanobis distance <span class="m">r_i^2 = \|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}</span>, each deviation pays a Cauchy penalty with scale <span class="m">s</span> = <code>layout_robust_scale</code> = 2:</p>
+      <div class="M">\rho(r^2) = s^2 \log\!\left(1 + \frac{r^2}{s^2}\right), \qquad w(r^2) = \frac{1}{1 + r^2/s^2}</div>
+      <p>Near zero it is the Gaussian <span class="m">r^2</span>. Far out it grows only logarithmically: past about 2σ, moving a deviation further barely costs anything more, so the solve would rather blame the prop than move the offset. The weight <span class="m">w</span> is how much of the Gaussian pull is left. The solve is <strong>iteratively reweighted least squares</strong>: solve with the layout terms scaled by their weights, recompute the weights from the new deviations, solve again (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L516"><code>weights</code></a>, <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L564"><code>run</code></a>).</p>
+    </div>
+
+    <figure class="fig narrow">
+      <div class="panel" id="robust-chart"></div>
+      <figcaption><b>The layout penalty against a deviation's size</b>, in layout standard deviations (1σ = 25 cm horizontally). The Cauchy cost with scale 2 follows the Gaussian up to about 1σ and then flattens; its weight falls to one half at 2σ, 50 cm, where mapping calls the prior released.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <p>A robust cost has more than one local minimum: "the torpedo is off" and "the gate and the slalom are off" can both be stable answers. IRLS started from zero can settle in the wrong one. So whenever the set of fixes changes (a new fix, or one frozen), the solve runs several times: once from zero, once more from zero <strong>blaming each prior in turn</strong> (that prop's first weight set to zero, every other to one), and once from the previous answer. It keeps the start with the lowest true robust cost (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L578">lines 578–590</a>). When only a live fix moved (one more detection of the object in view), it continues from the last answer for up to 8 iterations, which is what runs at detection rate.</p>
+      <p>A map object whose weight is below one half (its deviation is more than <span class="m">s</span> = 2 layout σ, 50 cm, from its prior) is <strong>released</strong>: its prior has stopped moving the map. Mapping logs when that changes (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/mapping.py#L807"><code>report_released_priors</code></a>):</p>
+      <pre><code>[WARN] torpedo's prior disagrees with the other props, released (it no longer moves the map)
+[INFO] torpedo's prior agrees with the other props again</code></pre>
+      <p>Releasing is not throwing away. The released prop's own fixes still place it, so its estimate is where it was seen; it mostly stops pulling the offset. Mostly: the Cauchy pull fades but never reaches zero, so in the blame figure a torpedo board moved 1.5 m (weight 0.12) still drags the offset about 13 cm its way. With a Gaussian prior it would drag it 67 cm. And because the weight is recomputed every solve, a prop released early, when it was the only evidence against two others, comes back if later fixes show the others were the odd ones out.</p>
+      <p>The course yaw comes out of the same solve. One prop can't tell a rotation from a shift. Two props at different bearings from the map origin can: a rotation moves the far one more. With the 2° prior the yaw only moves when several props agree on it, which is what a heading error from the calibration would look like.</p>
+
+      <h2 id="nereus" data-short="In Nereus">In Nereus</h2>
+      <p>On the robot, nothing tells mapping the truth. In Nereus the simulator knows where every prop is, so the estimate can be scored against it.</p>
+    </div>
+
+    <figure class="fig" id="nereus-offset">
+      <div class="panel"><div id="nereus-offset-chart"></div></div>
+      <figcaption><b>The offset through a Nereus run.</b> The whole course moved 0.6 m east and 0.4 m south of Talos's map (dashed), and the torpedo another 1.27 m. Lines are <code>map → offset</code> as mapping published it through the run; shaded bands are the behaviour tree's tasks. Chapter 8 has the run in full. Tap or hover for values.</figcaption>
+    </figure>
+    <div class="prose"><p id="nereus-offset-text"></p></div>
+
+    <div class="prose">
+      <h2 id="limits">What it assumes</h2>
+      <ul>
+        <li><strong>Odometry drift is a translation.</strong> The offset has no rotation of its own, only the one course yaw at the start. A heading that drifts during the run shows up as offsets that disagree between distant props, which the deviations then absorb. Talos's fibre-optic gyro keeps heading drift small, which is why this is reasonable.</li>
+        <li><strong>The vehicle's own track is not estimated.</strong> A fix is stamped with odometry distance and time, not with a vehicle pose. Between fixes only the drift model connects them.</li>
+        <li><strong>Only map-parented objects are in the solve.</strong> Torpedo holes, gate halves, slalom poles and table items live in their parent's frame with a three-state filter each (Chapter 5) and move with their parent.</li>
+        <li><strong>Only targeted objects establish themselves.</strong> A background object (seen while searching for something else) still gets fused, but its first time as the target starts a fresh search, so a far, oblique background estimate is never trusted as confirmed.</li>
+      </ul>
+    </div>
+    <nav class="next" aria-label="Chapter navigation"></nav>
+  </article>
+</main>
+<script type="module" src="/src/pages/map.js"></script>
+</body>
+</html>

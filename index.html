@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Talos sees · Perception and mapping for an AUV, explained</title>
+<meta name="description" content="An interactive explainer for riptide_perception: the YOLO detector, how a segmentation mask becomes a 3D pose, the detection noise model, the per-object filters and the robust course-map solve that tell Talos's autonomy where the props are.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23d9480f'/></svg>">
+</head>
+<body>
+<main>
+  <section class="hero course-hero" aria-label="A Nereus mission replayed from above">
+    <canvas id="hero-canvas" aria-label="Top-down view of the RoboSub course: Talos, its camera's field of view, detections and mapping's estimates of each prop."></canvas>
+    <div class="copy">
+      <h1>How Talos sees</h1>
+      <p class="sub">Perception and mapping for an AUV</p>
+      <p id="hero-blurb">A real run of Talos's mission in the Nereus simulator, replayed from above. The course was moved 72 cm off the map Talos was given, and the torpedo another 1.27 m; watch mapping move its map as each prop is seen.</p>
+    </div>
+    <figure class="cam-inset" id="cam-inset" hidden>
+      <video id="cam-video" muted playsinline preload="metadata"></video>
+      <figcaption>Forward camera, YOLO masks</figcaption>
+    </figure>
+    <div class="dock">
+      <div class="replay">
+        <button class="btn primary" id="play" aria-pressed="false">Play</button>
+        <div class="scrub">
+          <input type="range" id="scrub" min="0" max="1" step="0.1" value="0" aria-label="Mission time">
+          <div class="phases" id="phases"></div>
+        </div>
+        <div class="seg" id="speed" role="group" aria-label="Replay speed"><button data-v="4">4×</button><button data-v="16" aria-pressed="true">16×</button><button data-v="48">48×</button></div>
+      </div>
+      <div class="hud" aria-live="off">
+        <div class="row"><span>Mission time</span><b id="hud-t">–</b></div>
+        <div class="row"><span>Mapping target</span><b id="hud-target">–</b></div>
+        <div class="row"><span>Map offset</span><b id="hud-offset">–</b></div>
+        <div class="logline" id="hud-log">&nbsp;</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="page-head">
+    <div class="kicker">riptide_perception, chapter by chapter</div>
+    <p class="lede" style="margin-top:0" id="hero-lede">Dashed rings are where Talos's map put each prop before the run, grey shapes are where Nereus really put them, and the filled dots with ellipses are mapping's estimate with its 2σ uncertainty. Dots that flash near a prop are single detections from the camera.</p>
+  </div>
+
+  <article>
+    <div class="prose">
+      <p>Talos is the Underwater Robotics Team's competition AUV. To score at RoboSub it has to swim through a gate, around slalom poles, fire torpedoes through holes in a board, drop markers in bins and pick objects off a table, and every one of those tasks starts with the same question: where exactly is the thing? <a href="https://github.com/osu-uwrt/riptide_perception/tree/mapping-estimator"><code>riptide_perception</code></a> answers it. This site explains how, from the pixels to the coordinate frames the autonomy and the <a href="https://zehdari.github.io/riptide-mpc-explained/">controller</a> steer by.</p>
+      <p>The package has two halves. <code>tensor_detector</code> looks at camera images and says <em>what</em> it sees and where it is relative to the camera, one frame at a time. <code>riptide_mapping</code> collects those detections over the whole run and keeps a map of the course: an estimate of every prop's position, how sure it is, and an explanation for why the course isn't where the map said it would be. Already know Kalman filters and least squares? <a href="math.html">All the math is on one page</a>, with Talos's parameters.</p>
+
+      <h2 id="pipeline">From photons to frames</h2>
+      <p>Each stage is a box below. Tap or hover one for what it does and where it lives in the code. Every detection takes the same path through all of them.</p>
+    </div>
+    <figure class="fig">
+      <div class="panel" id="pipeline-graph"></div>
+      <figcaption><b>The perception pipeline.</b> Top row: one camera frame, through the detector to a 3D pose. Bottom row: mapping, which turns a stream of those poses into a map and publishes every prop as a TF frame and a pose with covariance. Autonomy chooses which props mapping is allowed to update.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h2 id="why">Why it is harder than it looks</h2>
+      <p>A neural network that outlines the torpedo board in an image is the well-trodden part: train a YOLO model on labelled pictures and it will. What makes underwater perception hard is everything after the outline:</p>
+      <ul>
+        <li><strong>The box is 2D.</strong> The board is 3D, tilted, and partly hidden. The detector has to pick the right depth pixels, reject the ones that belong to the pool wall behind the board, and fit a surface. (Chapters 2 and 3.)</li>
+        <li><strong>One detection is noisy, and how noisy depends on range.</strong> Stereo depth error grows with the square of distance, and a timestamp a few milliseconds off smears a detection sideways while the robot turns. (Chapter 4.)</li>
+        <li><strong>The detector is sometimes wrong.</strong> Slalom poles look like gate legs, the two bin vinyls are the same class, a reflection is a pole for one frame. Mapping has to ignore a stray detection without ignoring a prop that really is somewhere unexpected. (Chapter 5.)</li>
+        <li><strong>The map is wrong too.</strong> The prior layout comes from measuring the course by hand at the competition, and the robot's own odometry drifts metres over a run. A sighting of one prop has to correct the others, but a single badly measured prop must not drag the whole map with it. (Chapter 6.)</li>
+      </ul>
+      <p>The chapters take these in order. Every interactive figure runs a JavaScript port of the team's code: the detector's geometry and the mapping estimator, line for line, checked against the Python by a test suite. The real data comes from the <a href="https://github.com/osu-uwrt/nereus">Nereus</a> simulator running Talos's full software stack: its cameras, the YOLO models, mapping, the behaviour trees and the MPC, exactly as on the robot.</p>
+
+      <h2 id="chapters">The chapters</h2>
+      <ol class="chapter-list">
+        <li><a href="detector.html"><strong>Cameras and the detector.</strong></a> Two stereo cameras, two YOLO segmentation models, and how each image is paired with the depth map taken at the same instant.</li>
+        <li><a href="pose.html"><strong>From a mask to a pose.</strong></a> Sampling the mask, back-projecting through the depth, throwing out the background, and fitting a plane.</li>
+        <li><a href="composites.html"><strong>Props made of several pieces.</strong></a> The torpedo board, the gate halves, the table and the slalom poles: detections that only make sense together.</li>
+        <li><a href="noise.html"><strong>How far to trust a detection.</strong></a> A covariance for every detection, from range, bearing and how fast the robot is moving.</li>
+        <li><a href="tracking.html"><strong>Tracking one object.</strong></a> A Kalman filter per prop, the gate that rejects lookalikes, and why the first detections wait until they agree.</li>
+        <li><a href="map.html"><strong>The course map.</strong></a> One shared offset for odometry drift, a deviation per prop for layout error, and a robust solve that decides which is which.</li>
+        <li><a href="frames.html"><strong>Frames, targets and autonomy.</strong></a> What mapping publishes, how the behaviour trees drive it, and the special cases: two identical bins and a table fit to its baskets.</li>
+        <li><a href="mission.html"><strong>One mission in Nereus.</strong></a> The replay above, slowed down: every estimate against the truth, and what mapping said at each step.</li>
+      </ol>
+    </div>
+    <nav class="next" aria-label="Chapter navigation"></nav>
+  </article>
+</main>
+<script type="module" src="/src/pages/index.js"></script>
+</body>
+</html>

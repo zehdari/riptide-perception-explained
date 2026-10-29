@@ -1,0 +1,63 @@
+# Copy into nereus/content/packs/scenarios/<name>/scenario.yaml (pack paths are relative to it).
+# Talos on the RoboSub 2026 course. Pack paths are relative to this folder; the scenario owns
+# everything run-specific: world frame, placements, initial state, seed and run options.
+kind: scenario
+id: talos_uwrt_perception_shifted
+description: Talos and the UWRT stack on the RoboSub 2026 course.
+
+robot: ../../robots/talos
+pool: ../../pools/robosub_2026
+tasks: ../../tasks/robosub_2026
+bridge: ../../bridges/uwrt_talos
+equipment: ../../equipment/uwrt
+
+seed: 7
+timestep_s: 0.002   # physics step
+sensor_noise: true
+
+# World = the robot's `map` frame: ENU, +Z up, z = 0 at the water surface. Placements are
+# upright (yaw about world +Z only). The bridge runs the simulator in the stack's fixed `world` frame, which
+# `map` equals until a mapping calibration moves it; the viewer's panels stay in this frame.
+world_frame: map
+
+# Pool corner pose in the world.
+pool_placement:
+  position_m: [0.0, 19.5136, 0.0]
+  yaw_deg: -90.0
+
+# The calibration board on the pool's y = 0 side wall at the map origin, datum line at the waterline.
+equipment_placements:
+- {item: calibration_board, relative_to: pool, position_m: [19.5136, 0.0, -0.3394], yaw_deg: 90.0}
+
+# Task poses: the prior map shifted (0.6, -0.4) m, and the torpedo another (0.9, 0.9) m (perception explainer).
+task_placements:
+- {task: gate, position_m: [5.4102, -2.6179, -0.7500], yaw_deg: 170.645069}
+- {task: torpedo, position_m: [19.8522, 2.9805, -1.3720], yaw_deg: -169.835651}
+- {task: slalom, position_m: [8.9324, 0.1608, -1.3000], yaw_deg: -152.691724}
+- {task: bins, position_m: [14.0080, 11.9247, -2.1300], yaw_deg: -145.070841}
+# The octagon sits above the table.
+- {task: surface, position_m: [20.0201, 8.7407, -0.3048], yaw_deg: -45.273547}
+- {task: table, position_m: [19.8908, 8.6070, -1.5400], yaw_deg: 89.039804}
+
+# Where the table's loose objects start, on the table.
+task_frames:
+- {task: table, frame: bandage, position_m: [-0.157078, -0.147819, 0.03], yaw_deg: 180.0}
+- {task: table, frame: plug, position_m: [0.15233, -0.14664, 0.03], yaw_deg: 0.0}
+
+contacts:
+  model: box_scene
+  restitution: 0.1
+  friction: 0.4
+
+# Start state of the center of mass (body-axis velocities). Kill/arm defaults come from
+# robot.safety.
+initial:
+  frame: com
+  position_m: [0, 0, -1]
+  orientation_wxyz: [1, 0, 0, 0]
+  linear_velocity_m_s: [0, 0, 0]
+  angular_velocity_rad_s: [0, 0, 0]
+
+run:
+  auto_start: false   # a run starts on the operator's Start
+  options: {role: repair, heading_coin: true, role_coin: true, pinger_task: none, pinger_random: false}

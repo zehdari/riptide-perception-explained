@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracking one object · How Talos sees</title>
+<meta name="description" content="How riptide_mapping turns a stream of detections of one object into an estimate: a three-state Kalman filter, a chi-squared gate against lookalikes, acquisition by agreement, and the confirm and verify rules autonomy's covariance checks depend on.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23d9480f'/></svg>">
+</head>
+<body>
+<main>
+  <header class="page-head">
+    <div class="kicker">Chapter 5</div>
+    <h1>Tracking one object</h1>
+    <p class="lede">Each mapping object has its own small filter. It starts from where the layout says the object should be, waits until a few detections agree before believing any of them, then averages in every detection it's sure belongs, and refuses the ones that don't.</p>
+  </header>
+  <article>
+    <div class="prose">
+      <p>This chapter follows one object in isolation: its <strong>track</strong>, the estimate built from its own detections. For an object parented to another mapping frame (a torpedo hole in <code>torpedo_frame</code>, a table item in <code>table_frame</code>) the track <em>is</em> the estimate. For a course prop parented to <code>map</code>, the track becomes a <strong>fix</strong> once it has enough detections, and the course map solves for all the props together from their fixes (Chapter 6). The rules below are the same for both. They live in <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L316"><code>MapEstimator.observe</code></a> and the methods it calls.</p>
+      <p>Mapping doesn't fuse every detection the detector reports. It fuses the classes in its current <strong>target list</strong>, which autonomy sets through the <code>mapping_target</code> service, plus any <strong>background targets</strong>. With no target set, it fuses only the closest detected object more than 1 m from the camera. Lookalike props get each other's class often enough (slalom poles on the gate, for one) that fusing everything would drag objects onto their neighbours. Detections under the 0.2 confidence cutoff are dropped first. Everything on this page is about what happens to the detections that survive that filter.</p>
+
+      <h2 id="update">The update</h2>
+      <p>An object doesn't move, so there is no motion model between detections. The state is just a position <span class="m">\hat\bx</span> in the parent frame with covariance <span class="m">\P</span>. A detection <span class="m">\bz</span> measures the position directly, with the covariance <span class="m">\Rm</span> from Chapter 4 (already inflated for back-to-back frames). The Kalman update is then about as simple as one gets:</p>
+      <div class="M" data-narrow="\begin{aligned} \boldsymbol\nu &amp;= \bz - \hat\bx, \quad \mathbf S = \P + \Rm, \quad \K = \P\mathbf S^{-1} \\ \hat\bx &amp;\leftarrow \hat\bx + \K\boldsymbol\nu \\ \P &amp;\leftarrow (I - \K)\,\P\,(I - \K)^\top + \K\Rm\K^\top \end{aligned}">\boldsymbol\nu = \bz - \hat\bx, \quad \mathbf S = \P + \Rm, \quad \K = \P\mathbf S^{-1}, \qquad \hat\bx \leftarrow \hat\bx + \K\boldsymbol\nu, \qquad \P \leftarrow (I - \K)\,\P\,(I - \K)^\top + \K\Rm\K^\top</div>
+      <p>The gain <span class="m">\K</span> decides how far one detection moves the estimate: close to <span class="m">I</span> while the track knows little, close to zero once it knows a lot. Because <span class="m">\K</span> is a matrix, the move is per direction. A detection taken from the side corrects the estimate across its own ray, where it is precise, and barely touches it along the ray, where it isn't. The covariance update is written in the <strong>Joseph form</strong> rather than the shorter <span class="m">(I-\K)\P</span>. The two are equal in exact arithmetic, but the Joseph form stays symmetric and positive definite under rounding after thousands of updates. The code symmetrizes the result as well (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L436"><code>_update_position</code></a>).</p>
+      <p>There is one way a track's covariance grows rather than shrinks. A course prop's track lives in the odometry frame, and odometry drifts as Talos travels. Each time a prop is seen again, its track's covariance first gets the drift accumulated since its last detection, 0.002 m² per metre travelled horizontally, so a sighting from far back across the pool counts for less than a fresh one.</p>
+
+      <h3 id="yaw" data-short="Yaw">Yaw</h3>
+      <p>Heading gets its own scalar filter: the same update with 1×1 matrices, except the innovation is wrapped to <span class="m">(-\pi, \pi]</span> so a detection at 179° and an estimate at −179° are 2° apart, not 358°. Its prior is 30°, each detection 3°. Yaw has its own gate, <span class="m">\nu^2/S</span> &gt; 10.83 (the 99.9 % point of χ² with one degree of freedom), and a rejected yaw is skipped silently while the position update still counts.</p>
+    </div>
+
+    <div class="prose">
+      <h2 id="gating">Gating</h2>
+      <p>The innovation and its covariance say how surprising a detection is. The squared Mahalanobis distance <span class="m">d^2 = \boldsymbol\nu^\top \mathbf S^{-1} \boldsymbol\nu</span> measures the miss in units of the expected spread, direction by direction. If the detection really came from this object and the covariances are right, <span class="m">d^2</span> follows a χ² distribution with three degrees of freedom, and it exceeds 16.27 only 0.1 % of the time. So mapping rejects any detection beyond that:</p>
+      <div class="M">\boldsymbol\nu^\top (\P + \Rm)^{-1} \boldsymbol\nu \;>\; 16.27 \;=\; \chi^2_3(0.999) \quad\Rightarrow\quad \text{reject}</div>
+      <p>The gate is only applied once the track has 10 accepted detections (<code>gate_min_updates</code>). Before that, the track is still finding the object. Its covariance is wide anyway, so the gate would let almost anything through, and the agreement rule below is what protects the first detections. After that, the gate is what stops the classic failure: a lookalike half a metre away with the same class name, or a detection of the right object smeared by a bad depth reading. A rejected detection changes nothing.</p>
+      <p>A gate can also lock a track out of the truth. If the estimate converged on the wrong thing, or the prop was moved, every real detection is rejected from then on. So mapping counts rejections in a row: at 30 (<code>gate_max_rejects</code>, three seconds at the detector's 10 Hz in Nereus), it concludes the track locked onto the wrong thing, throws the track away (a course prop's fix is dropped, not kept for the map) and starts acquiring again from the prior. Any accepted detection resets the count.</p>
+
+      <h2 id="agreement">Acquisition by agreement</h2>
+      <p>The first detections after a reset are the dangerous ones. A track with a wide prior moves most of the way to whatever it sees first, so a single false detection right after a target change would drag the estimate off, and the gate, once active, would then defend the wrong place. The previous mapping guarded against this with a trimmed buffer of recent detections. The estimator does it by <strong>holding detections back until enough of them agree</strong> (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L390"><code>_agree</code></a>):</p>
+      <ul>
+        <li>While a track has no accepted detection, every detection is held instead of fused, for up to 4 s (<code>acquire_window_s</code>).</li>
+        <li>Two held detections <strong>agree</strong> if they're within <span class="m">\max(0.3\text{ m},\ 3\sqrt{\lambda_\text{max}(\Rm_a + \Rm_b)})</span> of each other, the larger of a fixed radius and three standard deviations of their combined noise (so far-away detections may spread more).</li>
+        <li>The biggest group of mutually close detections wins: for each held detection, count the others that agree with it, and take the largest.</li>
+        <li>Once the group has 4 members (<code>acquire_detections</code>), the track starts. The members are fused in time order, and every held detection outside the group is dropped. The log says <em>"4 detections agree, 1 that didn't dropped"</em>.</li>
+      </ul>
+      <p>The group is also checked against where the map expects the object. If its mean is further than <span class="m">d^2</span> &gt; 16.27 from the map's estimate (with the group's own spread added to the map's covariance), it is <strong>far</strong>: a lookalike off to the side could be agreeing with itself. A far group needs 12 members spanning at least 2 s before it takes over the prior, and the log then adds <em>"2.4 m from where the map had it: taking them over the prior"</em>. In practice that only bites once the map is tight. A course prop's estimate before any prop has been seen is about a metre wide (the offset's prior, Chapter 6), so even a cluster 2 m from the layout is not far yet. Once another prop has pinned the offset, the same cluster is.</p>
+      <p>Detections named by the bins' binary classifier (Chapter 7) skip the hold. The classifier has already clustered them before it assigns a target name, so they arrive pre-agreed.</p>
+    </div>
+    <figure class="fig">
+      <div class="panel trk-panel">
+        <div class="controls trk-controls" id="trk-controls"></div>
+        <div class="trk-views">
+          <div class="trk-view"><canvas id="trk-scene" aria-label="Top-down view of Talos, the prop and its detections"></canvas><div class="trk-tag">Pool, from above · drag Talos</div></div>
+          <div class="trk-view"><canvas id="trk-zoom" aria-label="Zoomed view around the prop"></canvas><div class="trk-tag" id="trk-zoom-tag">Around the prop, 80 cm across</div></div>
+        </div>
+        <div class="trk-status" id="trk-status"></div>
+        <ol class="trk-log" id="trk-log" aria-live="polite"></ol>
+      </div>
+      <figcaption><b>One prop, tracked live.</b> The browser's copy of <code>MapEstimator</code> fusing detections of the torpedo at 10 Hz, with noise drawn from Chapter 4's model. The dark square is the real prop, and its layout position (the prior) sits 40 cm away. Hollow dots are held detections waiting to agree, each with its 30 cm agreement circle. Filled dots were fused, crosses were rejected by the gate, grey dots were dropped. The orange ellipse is the estimate at 2σ, and the dashed one is the gate once it's active. Try a stray detection during acquisition, then the lookalike, then move the prop once it's established. The log lines are the estimator's own reason strings.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h2 id="confirm">Targeted, established, confirmed</h2>
+      <p>Autonomy needs to know when an estimate is good enough to act on, and it asks by reading covariance. A behavior tree's <code>getCovariance</code> check waits for the published variance of, say, <code>mapping/torpedo</code> to fall under a threshold before it drives to it. So whether the estimate is "done" is decided by what mapping publishes, and mapping keeps that strict. Three flags on each track decide it:</p>
+      <ul>
+        <li><strong>Targeted.</strong> Only detections of an object in the target list (or the closest object, with no target set) can confirm it. Background targets are fused, and their estimates improve, but a prop seen only off to the side, far away and at an angle, never becomes confirmed that way. The first time it's targeted, it starts a fresh search from where it was.</li>
+        <li><strong>Established.</strong> 10 accepted detections while targeted since the last full reset (<code>confirm_detections</code>). The estimate is good.</li>
+        <li><strong>Confirmed.</strong> Established, and nothing has asked for it to be checked again since. This is what the published covariance depends on.</li>
+      </ul>
+      <p>Setting a target calls <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/mapping.py#L476"><code>reset(target, verify=True)</code></a> for every object in the list, which clears <em>confirmed</em>, so a covariance check after a target change always needs fresh detections. What happens next depends on whether the object was established:</p>
+      <ul>
+        <li><strong>Never established:</strong> a full reset. The estimate keeps its position but goes back to its prior covariance, the next detections wait for agreement, and confirmation needs 10 targeted detections again.</li>
+        <li><strong>Established before:</strong> a <strong>verify</strong>. The estimate keeps its position and covariance, widened by the odometry drift since it was last seen, and 3 detections that land inside the gate (<code>verify_detections</code>) confirm it again. Coming back to a prop already mapped takes a fraction of a second, not a whole new search. If a detection lands outside the gate, the prop isn't where it was. The log says <em>"moved 62 cm since it was last seen, finding it again"</em>, and that detection becomes the first of a fresh search.</li>
+      </ul>
+
+      <h3 id="published">What gets published</h3>
+      <p>Until an object is confirmed, mapping doesn't publish its real covariance. It raises every position variance to at least 1.0 m², and the angle variances to at least 0.1 rad² (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/mapping.py#L1003"><code>publish_pose</code></a>). Those are the values the previous mapping reported for an object whose detection buffer hadn't filled yet, above every threshold in the trees. The trees were written against that behavior, and the floor keeps it: <em>covariance under threshold</em> still means <em>freshly seen, while targeted</em>. Mapping publishes right after a target change, so a check that runs immediately afterwards already sees the floor.</p>
+    </div>
+    <figure class="fig narrow">
+      <div class="panel" id="trk-pub-chart"></div>
+      <figcaption><b>Published covariance against detections.</b> The real estimator: a torpedo targeted for the first time, then retargeted after it's established, with 10 Hz detections from 2 m. The solid line is what <code>mapping/torpedo</code> publishes (the larger horizontal σ), and the dashed line is the estimator's own. The two only meet once the track is confirmed: at the 10th detection on the first visit, and the 3rd after the retarget.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <h2 id="limits">What this doesn't do</h2>
+      <ul>
+        <li>A track is one object. Two props of the same class in view at once (the bins' two identical targets) would be averaged into one point between them. That's why bins go through the binary classifier, which separates instances before naming them.</li>
+        <li>The agreement rule picks the biggest cluster, not the right one. If a lookalike produces more detections than the real prop within the window, the lookalike wins, and the gate then defends it until 30 rejections in a row reacquire. The target lists and the far rule exist to make that unlikely.</li>
+        <li>Between the agreement (4 detections) and the gate switching on (10), nothing filters detections of the target class. A lookalike that starts being detected in that second or so is fused in full and drags the estimate toward it. Turn on the lookalike right after <em>"4 detections agree"</em> in the demo to see it.</li>
+        <li>A child object's track isn't aged between detections, only when it's retargeted. A torpedo hole is filtered in <code>torpedo_frame</code>, which moves with the torpedo's estimate, so the drift is mostly carried by the parent.</li>
+      </ul>
+    </div>
+    <nav class="next" aria-label="Chapter navigation"></nav>
+  </article>
+</main>
+<script type="module" src="/src/pages/tracking.js"></script>
+</body>
+</html>

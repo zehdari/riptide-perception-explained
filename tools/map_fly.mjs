@@ -1,0 +1,17 @@
+import { chromium } from 'playwright';
+const [url, out, w = 1400, h = 900, wait = 30000, sel = '#course-fig'] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome' });
+const page = await browser.newPage({ viewport: { width: +w, height: +h } });
+const errors = [];
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.text()); });
+page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
+await page.goto(url, { waitUntil: 'networkidle' });
+await page.locator(sel).scrollIntoViewIfNeeded();
+await page.getByRole('button', { name: '25×' }).click();
+await page.getByRole('button', { name: 'Fly the course' }).click();
+const t0 = Date.now();
+await page.waitForTimeout(+wait);
+await page.locator(sel).screenshot({ path: out });
+console.log(errors.slice(0, 10).join('\n') || 'no console errors');
+console.log(await page.locator('#course-readout').innerText());
+await browser.close();

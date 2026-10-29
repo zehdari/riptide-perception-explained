@@ -1,0 +1,29 @@
+/* The course map figure */
+.map-canvas { display: block; width: 100%; border-radius: 6px; background: var(--paper); touch-action: pan-y; }
+.map-fly { margin-top: 0.8rem; margin-bottom: 0.4rem; }
+.map-fly .seg { margin-left: auto; }
+.map-muted { color: var(--muted); }
+.map-readout { font-family: var(--sans); font-size: 0.84rem; color: var(--ink-2); }
+.map-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.4rem 1rem; margin: 0.6rem 0 0.2rem; font-variant-numeric: tabular-nums; }
+.map-summary small { display: block; color: var(--muted); font-size: 0.76rem; }
+.map-summary b { color: var(--ink); font-weight: 600; }
+.map-table td, .map-table th { white-space: nowrap; }
+.map-table td:nth-child(2) { white-space: normal; }
+table.params.map-table td:first-child { white-space: nowrap; }
+.map-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.4rem; vertical-align: 0; }
+.map-w { display: inline-block; width: 4.5rem; height: 7px; background: var(--paper-3); border-radius: 4px; overflow: hidden; vertical-align: 1px; }
+.map-w span { display: block; height: 100%; border-radius: 4px; }
+.map-badge { font-size: 0.72rem; font-weight: 600; color: var(--paper); background: var(--accent); border-radius: 999px; padding: 0.05rem 0.45rem; }
+.map-log { font-family: var(--mono); font-size: 0.72rem; line-height: 1.5; background: var(--ink); color: #dce9ec; border-radius: 6px; padding: 0.5rem 0.7rem; min-height: 4.4rem; overflow-wrap: anywhere; }
+.map-log .warn { color: #ffb58a; }
+.map-chart { margin-top: 0.8rem; }
+.map-note { font-family: var(--sans); font-size: 0.86rem; color: var(--ink-2); line-height: 1.45; min-height: 2.8em; margin-top: 0.4rem; }
+.map-blame { align-items: center; }
+@media (max-width: 640px) {
+  .map-fly .seg { margin-left: 0; }
+  .map-table { font-size: 0.76rem; }
+}
+@media (max-width: 640px) {
+  .map-w { width: 2.4rem; }
+  .map-table td, .map-table th { padding-right: 0.35rem; }
+}

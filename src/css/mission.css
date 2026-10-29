@@ -1,0 +1,16 @@
+/* Chapter 8: the run replay and mapping's log. */
+.replay-panel { background: linear-gradient(180deg, #e3f1f3 0%, var(--water) 60%, var(--water-deep) 100%); }
+.replay-panel canvas { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 72vh; }
+.replay-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; padding: 0.6rem 0.8rem; background: rgba(243, 247, 247, 0.92); font-family: var(--sans); font-size: 0.86rem; }
+.replay-bar input[type='range'] { flex: 1 1 12rem; width: auto; }
+.replay-bar output { font-variant-numeric: tabular-nums; min-width: 3em; }
+.maplog { list-style: none; margin: 0; padding: 0; max-height: 26rem; overflow-y: auto; font-family: var(--mono); font-size: 0.74rem; line-height: 1.4; }
+.maplog li { display: grid; grid-template-columns: 3.2rem 1fr; gap: 0.6rem; padding: 0.28rem 0.3rem; border-bottom: 1px solid var(--rule); cursor: pointer; margin: 0; }
+.maplog li:hover { background: var(--paper); }
+.maplog li.tree { color: var(--muted); }
+.maplog li.warn span { color: #b2360b; font-weight: 600; }
+.maplog time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.maplog span { overflow-wrap: anywhere; }
+#final-table .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.45rem; }
+@media (max-width: 720px) { .replay-panel canvas { aspect-ratio: 3 / 4; } }
+.viewer-clip { display: block; width: 100%; border-radius: 10px; background: #0f2633; }

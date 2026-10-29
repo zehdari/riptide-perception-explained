@@ -1,0 +1,24 @@
+.trk-controls { gap: 0.45rem 0.5rem; }
+.trk-controls .btn { white-space: nowrap; }
+.trk-controls label { margin-left: 0.4rem; }
+.trk-views { display: grid; grid-template-columns: 1.25fr 1fr; gap: 0.7rem; }
+.trk-view { position: relative; }
+.trk-view canvas { display: block; width: 100%; border-radius: 6px; background: var(--paper); touch-action: none; }
+#trk-scene { cursor: grab; }
+.trk-tag { font-family: var(--sans); font-size: 0.76rem; color: var(--muted); margin-top: 0.25rem; }
+.trk-status { display: flex; flex-wrap: wrap; gap: 0.35rem 0.4rem; margin-top: 0.7rem; font-family: var(--sans); font-size: 0.8rem; font-variant-numeric: tabular-nums; align-items: center; }
+.trk-status .chip { border: 1px solid var(--rule); border-radius: 999px; padding: 0.15rem 0.6rem; color: var(--muted); background: var(--paper); }
+.trk-status .chip.on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.trk-status .chip.warn { border-color: var(--accent); color: var(--accent); }
+.trk-status .num { color: var(--ink-2); margin-left: 0.4rem; }
+.trk-status .num b { color: var(--ink); font-weight: 600; }
+.trk-log { list-style: none; margin: 0.6rem 0 0; padding: 0.5rem 0.7rem; background: var(--paper); border-radius: 6px; font-family: var(--mono); font-size: 0.74rem; line-height: 1.5; color: var(--ink-2); height: 9.6em; overflow: hidden; }
+.trk-log li { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trk-log li .t { color: var(--muted); display: inline-block; min-width: 4.2em; }
+.trk-log li.rej { color: var(--s8); }
+.trk-log li.ev { color: var(--ink); }
+@media (max-width: 640px) {
+  .trk-views { grid-template-columns: 1fr; }
+  .trk-log li { white-space: normal; }
+  .trk-log { height: 12em; }
+}

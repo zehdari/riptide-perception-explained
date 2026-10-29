@@ -1,0 +1,29 @@
+/* Frame views and figure bits shared by chapters 1–3 (detector, pose, composites). */
+.frameview { position: relative; width: 100%; aspect-ratio: 1920 / 1200; border-radius: 6px; overflow: hidden; background: #2b6f7d; }
+.frameview img, .frameview svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.frameview svg { overflow: visible; }
+.frame-note { font-family: var(--sans); font-size: 0.84rem; color: var(--ink-2); margin-top: 0.55rem; min-height: 2.6em; font-variant-numeric: tabular-nums; }
+.frame-note b { color: var(--ink); font-weight: 600; }
+.seg { flex-wrap: wrap; border-radius: 14px; background: var(--paper); }
+.seg button { white-space: nowrap; }
+
+table.classes td:nth-child(1) { width: 2.2rem; color: var(--muted); }
+table.classes i.sw { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; margin-right: 0.45rem; vertical-align: -0.05rem; box-shadow: inset 0 0 0 1px rgba(15, 38, 51, 0.25); }
+
+/* two panes that stack on a phone */
+.pair { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 760px) { .pair { grid-template-columns: 1fr; } }
+
+.cloud3d { position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 26rem; background: var(--paper); border-radius: 6px; touch-action: pan-y; cursor: grab; }
+.cloud3d canvas { display: block; width: 100%; height: 100%; }
+.cloud3d .hint3d { position: absolute; left: 0.6rem; bottom: 0.45rem; font-family: var(--sans); font-size: 0.74rem; color: var(--muted); pointer-events: none; }
+
+.keys { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; font-family: var(--sans); font-size: 0.8rem; color: var(--ink-2); margin: 0.6rem 0 0; }
+.keys span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.keys i { width: 0.65rem; height: 0.65rem; border-radius: 50%; display: inline-block; }
+
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.35rem 1rem; font-family: var(--sans); font-size: 0.82rem; color: var(--ink-2); margin-top: 0.7rem; font-variant-numeric: tabular-nums; }
+.readout b { display: block; color: var(--ink); font-weight: 600; font-size: 0.95rem; }
+
+svg.diagram { display: block; width: 100%; height: auto; font-family: var(--sans); overflow: visible; }
+svg.diagram text { font-size: 13px; fill: var(--ink-2); }

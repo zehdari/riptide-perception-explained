@@ -1,0 +1,98 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.181Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "detector.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.185Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "pose.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.189Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "composites.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.193Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "noise.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.197Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "tracking.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.202Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "map.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.206Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "frames.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.210Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "math.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.215Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "mission.html"
+        ],
+        "createdAt": "2026-10-29T15:05:00.220Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      }
+    ]
+  }
+}

@@ -1,0 +1,236 @@
+{
+"source": "Nereus, Talos holding still with the MPC at each distance for 15 s; scatter in the map frame",
+"rows": [
+{
+"hold": "hold_torpedo_1.5",
+"class": "blood_hole_large",
+"n": 143,
+"range": 1.517,
+"std_along": 0.00315,
+"std_across": 0.00132,
+"std_along_cam": 0.00324,
+"span_s": 14.93,
+"rate_hz": 9.51
+},
+{
+"hold": "hold_torpedo_2",
+"class": "blood_hole_large",
+"n": 156,
+"range": 2.007,
+"std_along": 0.00232,
+"std_across": 0.00134,
+"std_along_cam": 0.00656,
+"span_s": 14.93,
+"rate_hz": 10.38
+},
+{
+"hold": "hold_torpedo_3",
+"class": "blood_hole_large",
+"n": 158,
+"range": 3.005,
+"std_along": 0.00491,
+"std_across": 0.0039,
+"std_along_cam": 0.01321,
+"span_s": 14.87,
+"rate_hz": 10.56
+},
+{
+"hold": "hold_torpedo_4",
+"class": "blood_hole_large",
+"n": 130,
+"range": 3.993,
+"std_along": 0.00632,
+"std_across": 0.00243,
+"std_along_cam": 0.00639,
+"span_s": 12.13,
+"rate_hz": 10.63
+},
+{
+"hold": "hold_torpedo_1.5",
+"class": "blood_hole_small",
+"n": 143,
+"range": 1.421,
+"std_along": 0.00308,
+"std_across": 0.00152,
+"std_along_cam": 0.00319,
+"span_s": 14.93,
+"rate_hz": 9.51
+},
+{
+"hold": "hold_torpedo_2",
+"class": "blood_hole_small",
+"n": 156,
+"range": 1.912,
+"std_along": 0.0023,
+"std_across": 0.00128,
+"std_along_cam": 0.00655,
+"span_s": 14.93,
+"rate_hz": 10.38
+},
+{
+"hold": "hold_torpedo_3",
+"class": "blood_hole_small",
+"n": 158,
+"range": 2.91,
+"std_along": 0.00459,
+"std_across": 0.00393,
+"std_along_cam": 0.013,
+"span_s": 14.87,
+"rate_hz": 10.56
+},
+{
+"hold": "hold_torpedo_4",
+"class": "blood_hole_small",
+"n": 130,
+"range": 3.9,
+"std_along": 0.00498,
+"std_across": 0.00221,
+"std_along_cam": 0.0052,
+"span_s": 12.13,
+"rate_hz": 10.63
+},
+{
+"hold": "hold_torpedo_1.5",
+"class": "fire_hole_large",
+"n": 143,
+"range": 1.329,
+"std_along": 0.00295,
+"std_across": 0.00154,
+"std_along_cam": 0.00307,
+"span_s": 14.93,
+"rate_hz": 9.51
+},
+{
+"hold": "hold_torpedo_2",
+"class": "fire_hole_large",
+"n": 156,
+"range": 1.822,
+"std_along": 0.00238,
+"std_across": 0.00125,
+"std_along_cam": 0.00657,
+"span_s": 14.93,
+"rate_hz": 10.38
+},
+{
+"hold": "hold_torpedo_3",
+"class": "fire_hole_large",
+"n": 158,
+"range": 2.819,
+"std_along": 0.00458,
+"std_across": 0.00416,
+"std_along_cam": 0.01308,
+"span_s": 14.87,
+"rate_hz": 10.56
+},
+{
+"hold": "hold_torpedo_4",
+"class": "fire_hole_large",
+"n": 130,
+"range": 3.811,
+"std_along": 0.00584,
+"std_across": 0.00224,
+"std_along_cam": 0.00618,
+"span_s": 12.13,
+"rate_hz": 10.63
+},
+{
+"hold": "hold_torpedo_1.5",
+"class": "fire_hole_small",
+"n": 143,
+"range": 1.397,
+"std_along": 0.00307,
+"std_across": 0.00146,
+"std_along_cam": 0.00318,
+"span_s": 14.93,
+"rate_hz": 9.51
+},
+{
+"hold": "hold_torpedo_2",
+"class": "fire_hole_small",
+"n": 156,
+"range": 1.895,
+"std_along": 0.00237,
+"std_across": 0.00116,
+"std_along_cam": 0.00665,
+"span_s": 14.93,
+"rate_hz": 10.38
+},
+{
+"hold": "hold_torpedo_3",
+"class": "fire_hole_small",
+"n": 158,
+"range": 2.9,
+"std_along": 0.00461,
+"std_across": 0.00375,
+"std_along_cam": 0.01329,
+"span_s": 14.87,
+"rate_hz": 10.56
+},
+{
+"hold": "hold_torpedo_4",
+"class": "fire_hole_small",
+"n": 130,
+"range": 3.893,
+"std_along": 0.0051,
+"std_across": 0.00201,
+"std_along_cam": 0.0054,
+"span_s": 12.13,
+"rate_hz": 10.63
+},
+{
+"hold": "hold_gate_3",
+"class": "gate_rescue",
+"n": 171,
+"range": 3.091,
+"std_along": 0.0067,
+"std_across": 0.00334,
+"std_along_cam": 0.01582,
+"span_s": 14.8,
+"rate_hz": 11.49
+},
+{
+"hold": "hold_torpedo_1.5",
+"class": "torpedo",
+"n": 143,
+"range": 1.397,
+"std_along": 0.00307,
+"std_across": 0.00141,
+"std_along_cam": 0.00318,
+"span_s": 14.93,
+"rate_hz": 9.51
+},
+{
+"hold": "hold_torpedo_2",
+"class": "torpedo",
+"n": 156,
+"range": 1.895,
+"std_along": 0.0023,
+"std_across": 0.00121,
+"std_along_cam": 0.00662,
+"span_s": 14.93,
+"rate_hz": 10.38
+},
+{
+"hold": "hold_torpedo_3",
+"class": "torpedo",
+"n": 158,
+"range": 2.9,
+"std_along": 0.00426,
+"std_across": 0.00417,
+"std_along_cam": 0.01298,
+"span_s": 14.87,
+"rate_hz": 10.56
+},
+{
+"hold": "hold_torpedo_4",
+"class": "torpedo",
+"n": 167,
+"range": 3.899,
+"std_along": 0.0056,
+"std_across": 0.00304,
+"std_along_cam": 0.01305,
+"span_s": 14.93,
+"rate_hz": 11.12
+}
+]
+}
