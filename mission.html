@@ -53,6 +53,12 @@
       <figcaption><b>Both runs from above.</b> Grey shapes are the props where Nereus put them, dashed rings where Talos's map has them. Filled dots with ellipses are mapping's estimate and its 2σ uncertainty once the prop is confirmed; hollow dots are estimates not confirmed by detections since their last reset, which mapping publishes with the 1 m² covariance floor. Small dots are single detections as they arrive, each with a short line along the surface normal it measured; little circles are objects in another prop's frame (torpedo holes, the table's baskets and items, the bin targets). The orange wedge is the forward camera's field of view. Under the map: the camera at the last thing mapping or the tree reported, and what the tree is doing. The task buttons jump straight to each part of the run.</figcaption>
     </figure>
 
+    <figure class="fig">
+      <video class="viewer-clip" id="run-video" src="video/mission_8x.mp4" poster="video/mission_8x.jpg" controls muted playsinline preload="metadata"></video>
+      <div class="vh-chapters" id="run-video-chapters" role="group" aria-label="Jump to a task"></div>
+      <figcaption><b>The exact-course run in the Nereus viewer</b>, eight times real speed, from the kill switch to the end of the tree. The pool view follows Talos, with mapping's covariance ellipsoids where TF puts each estimate; below it are the forward and downward cameras and the course map, and mapping's current target is on the left. Tap a task to jump to it.</figcaption>
+    </figure>
+
     <div class="prose">
       <h2 id="offset" data-short="1: the torpedo moves the map">What went wrong 1: the torpedo moves the whole map</h2>
       <p>In short: the slalom put the map in the right place, then the badly placed torpedo was explained mostly as the robot having drifted, which dragged every prop Talos had not looked at yet back off the truth.</p>

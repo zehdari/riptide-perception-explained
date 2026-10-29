@@ -1,34 +1,108 @@
 import { setup } from '../layout.js';
 import { Graph } from '../viz/graph.js';
+import { CourseView, at } from '../viz/course.js';
 import '../css/index.css';
 
 setup();
 const BASE = import.meta.env.BASE_URL;
 
-// ---------- hero: the mission video, with a button per task ----------
+// ---------- hero: the mission replay ----------
 {
-  const video = document.getElementById('hero-video');
-  const host = document.getElementById('hero-chapters');
-  fetch(`${BASE}data/mission_video.json`).then((r) => r.json()).then((d) => {
-    for (const [t, name] of d.chapters) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = name;
-      b.onclick = () => { video.currentTime = t; video.play().catch(() => {}); };
-      host.appendChild(b);
+  const canvas = document.getElementById('hero-canvas');
+  const play = document.getElementById('play');
+  const scrub = document.getElementById('scrub');
+  const hudT = document.getElementById('hud-t'), hudTarget = document.getElementById('hud-target');
+  const hudOffset = document.getElementById('hud-offset'), hudLog = document.getElementById('hud-log');
+  const inset = document.getElementById('cam-inset');
+  // the snapshot image is created here, so the page never ships an <img> without a source
+  const camImg = Object.assign(new Image(), { alt: "The camera at this moment, with YOLO's masks" });
+  inset.prepend(camImg);
+  const camWhen = document.getElementById('cam-when'), camText = document.getElementById('cam-text'), hudTree = document.getElementById('hud-tree');
+  let shownCard = null;
+  const phone = matchMedia('(max-width: 720px)');
+  let view, data, speed = 16, playing = false, last = 0, t = 0, end = 1;
+
+  const fmtT = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const insets = () => (phone.matches ? [150, 10, 280, 10] : [40, 30, 120, Math.min(520, innerWidth * 0.36)]);
+
+  function update() {
+    view.o.insets = insets();
+    view.set(t);
+    scrub.value = t;
+    hudT.textContent = fmtT(t);
+    const tg = at(data.targets, t);
+    hudTarget.textContent = tg ? (tg[1] ? tg[1].replace(/,\s*$/, '') : tg[2] ? 'none, map locked' : 'closest object') : '–';
+    const off = at(data.offset, t);
+    hudOffset.textContent = off ? `${(Math.hypot(off[1], off[2]) * 100).toFixed(0)} cm` : '–';
+    const line = at(data.log, t);
+    hudLog.textContent = line && t - line[0] < 25 ? line[2] : ' ';
+    // the camera at the latest event, with what mapping or the tree said
+    const card = at(data.cards, t);
+    if (card !== shownCard) {
+      shownCard = card;
+      inset.hidden = !card;
+      if (card) {
+        camImg.src = `${BASE}img/events/${card[1]}`;
+        camWhen.textContent = fmtT(card[0]);
+        camText.textContent = (card[3] === 'tree' ? 'Tree: ' : 'Mapping: ') + card[2];
+      }
     }
-    const mark = () => {
-      let on = -1;
-      d.chapters.forEach(([t], i) => { if (video.currentTime >= t - 0.2) on = i; });
-      host.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === on)));
-    };
-    video.addEventListener('timeupdate', mark);
-    mark();
-  });
-  // play when on screen (muted), unless the reader prefers less motion
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    new IntersectionObserver((es) => { es[0].isIntersecting ? video.play().catch(() => {}) : video.pause(); }, { threshold: 0.4 }).observe(video);
+    const tl = at(data.tree_log?.filter((x) => !x[1].startsWith('Message from')), t);
+    hudTree.textContent = !tl ? '–' : /target\s+and\s+locking map/.test(tl[1]) ? 'locking the map'
+      : tl[1].replace(/^Setting mapping to target\s*/, 'targeting ').replace(/,?\s*and (not )?locking map$/, '');
   }
+
+  function frame(now) {
+    if (!playing) return;
+    const dt = Math.min((now - last) / 1000, 0.1);
+    last = now;
+    t = Math.min(end, t + dt * speed);
+    update();
+    if (t >= end) { setPlaying(false); return; }
+    requestAnimationFrame(frame);
+  }
+  function setPlaying(on) {
+    playing = on;
+    play.textContent = on ? 'Pause' : t >= end ? 'Replay' : 'Play';
+    play.setAttribute('aria-pressed', String(on));
+    if (on) {
+      if (t >= end) t = 0;
+      last = performance.now();
+      requestAnimationFrame(frame);
+    }
+  }
+  play.onclick = () => setPlaying(!playing);
+  scrub.oninput = () => { t = +scrub.value; update(); };
+  document.querySelectorAll('#speed button').forEach((b) => {
+    b.onclick = () => {
+      speed = +b.dataset.v;
+      document.querySelectorAll('#speed button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+    };
+  });
+
+  fetch(`${BASE}data/mission_hero_exact.json`).then((r) => r.json()).then((d) => {
+    data = d;
+    end = d.duration;
+    scrub.max = end;
+    view = new CourseView(canvas, d, { insets: insets(), box: d.box });
+    // the mission's phases under the scrubber
+    const ph = document.getElementById('phases');
+    for (const [s, e, name] of d.phases || []) {
+      const el = document.createElement('span');
+      el.style.left = `${(s / end) * 100}%`;
+      el.style.width = `${((e - s) / end) * 100}%`;
+      el.textContent = name;
+      el.title = name;
+      ph.appendChild(el);
+    }
+    t = d.start || 0;
+    update();
+    addEventListener('resize', update);
+    // Start playing once the hero is on screen
+    new IntersectionObserver((es, ob) => {
+      if (es[0].isIntersecting && !matchMedia('(prefers-reduced-motion: reduce)').matches) { setPlaying(true); ob.disconnect(); }
+    }).observe(canvas);
+  });
 }
 
 // ---------- the pipeline graph ----------

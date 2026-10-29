@@ -207,3 +207,23 @@ const phaseBands = (phases) => phases.map(([s, e, name], i) => ({ x0: s, x1: e, 
   };
   new ResizeObserver(drawMap).observe(cv);
 }
+
+// ---------- the exact-course run as a video, with a button per task ----------
+{
+  const video = document.getElementById('run-video');
+  const host = document.getElementById('run-video-chapters');
+  fetch(`${BASE}data/mission_video.json`).then((r) => r.json()).then((d) => {
+    for (const [t, name] of d.chapters) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = name;
+      b.onclick = () => { video.currentTime = t; video.play().catch(() => {}); };
+      host.appendChild(b);
+    }
+    video.addEventListener('timeupdate', () => {
+      let on = -1;
+      d.chapters.forEach(([t], i) => { if (video.currentTime >= t - 0.2) on = i; });
+      host.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === on)));
+    });
+  });
+}

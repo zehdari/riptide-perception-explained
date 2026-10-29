@@ -9,17 +9,33 @@
 </head>
 <body>
 <main>
-  <section class="video-hero" aria-label="Talos running its competition mission in Nereus">
-    <div class="vh-copy">
+  <section class="hero course-hero" aria-label="A Nereus mission replayed from above">
+    <canvas id="hero-canvas" aria-label="Top-down view of the RoboSub course: Talos, its camera's field of view, detections and mapping's estimates of each prop."></canvas>
+    <div class="copy">
       <h1>How Talos sees</h1>
       <p class="sub">Perception and mapping for an AUV</p>
-      <p>Talos's whole software stack, cameras to behaviour tree, running the team's RoboSub 2026 mission in the Nereus simulator, eight times faster than real time. Every prop it swims to, it found with the code this site explains.</p>
+      <p id="hero-blurb">A real run of Talos's competition mission in the Nereus simulator, replayed from above: every detection, every estimate, and what the camera saw as mapping and the behaviour tree reported each step.</p>
     </div>
-    <figure class="vh-video">
-      <video id="hero-video" src="video/mission_8x.mp4" poster="video/mission_8x.jpg" muted playsinline loop preload="metadata" controls></video>
-      <div class="vh-chapters" id="hero-chapters" role="group" aria-label="Jump to a task"></div>
-      <figcaption>The Nereus viewer during the run: the pool view following Talos (mapping's covariance ellipsoids are drawn where TF puts each estimate), the forward and downward cameras, the course map, and mapping's current target on the left. Tap a task to jump to it.</figcaption>
+    <figure class="cam-inset" id="cam-inset" hidden>
+      <figcaption><span id="cam-when"></span> <span id="cam-text"></span></figcaption>
     </figure>
+    <div class="dock">
+      <div class="replay">
+        <button class="btn primary" id="play" aria-pressed="false">Play</button>
+        <div class="scrub">
+          <input type="range" id="scrub" min="0" max="1" step="0.1" value="0" aria-label="Mission time">
+          <div class="phases" id="phases"></div>
+        </div>
+        <div class="seg" id="speed" role="group" aria-label="Replay speed"><button data-v="4">4×</button><button data-v="16" aria-pressed="true">16×</button><button data-v="48">48×</button></div>
+      </div>
+      <div class="hud" aria-live="off">
+        <div class="row"><span>Mission time</span><b id="hud-t">–</b></div>
+        <div class="row"><span>Mapping target</span><b id="hud-target">–</b></div>
+        <div class="row"><span>Map offset</span><b id="hud-offset">–</b></div>
+        <div class="row"><span>Tree is</span><b id="hud-tree">–</b></div>
+        <div class="logline" id="hud-log">&nbsp;</div>
+      </div>
+    </div>
   </section>
 
   <div class="page-head">
@@ -46,7 +62,8 @@
 
     <div class="prose">
       <h2 id="run">The run above</h2>
-      <p>The video is one run of <code>RepairCompMpcTree</code>, the tree the team runs at competition, with the course placed exactly where Talos's map says. Talos passes the gate on its prior map, maps the slalom and the torpedo board, fires at the board's holes, finds both table baskets, centres the table on them, picks up each of the four objects and carries it to its basket, drops both markers in the bins, works the magnets, and swims home through the gate. Each of those steps waits on a mapping estimate getting precise enough (Chapter 9 lists every threshold). <a href="mission.html">Chapter 10</a> replays the same run from above with every detection and estimate, and then repeats it on a course moved off the map, where two things go wrong.</p>
+      <p>Grey shapes are the props where Nereus put them and dashed rings where Talos's map has them (here they match). Filled dots with ellipses are mapping's estimate with its 2σ uncertainty once a prop is confirmed; hollow dots are estimates still published as unconfirmed. Small dots are single detections, each with a short line along the surface normal it measured; little circles are objects in another prop's frame (torpedo holes, the table's baskets and items, the bin targets). The camera card shows what the camera saw, with YOLO's masks, at the last thing mapping or the tree reported.</p>
+      <p>The replay is one run of <code>RepairCompMpcTree</code>, the tree the team runs at competition, with the course placed exactly where Talos's map says. Talos passes the gate on its prior map, maps the slalom and the torpedo board, fires at the board's holes, finds both table baskets, centres the table on them, picks up each of the four objects and carries it to its basket, drops both markers in the bins, works the magnets, and swims home through the gate. Each of those steps waits on a mapping estimate getting precise enough (Chapter 9 lists every threshold). <a href="mission.html">Chapter 10</a> has the same run as an 8× video from the Nereus viewer, every estimate against the truth, and then repeats the run on a course moved off the map, where two things go wrong.</p>
 
       <h2 id="chapters">The chapters</h2>
       <p class="part-label">Vision</p>
