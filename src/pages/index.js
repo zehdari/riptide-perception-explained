@@ -13,7 +13,12 @@ const BASE = import.meta.env.BASE_URL;
   const scrub = document.getElementById('scrub');
   const hudT = document.getElementById('hud-t'), hudTarget = document.getElementById('hud-target');
   const hudOffset = document.getElementById('hud-offset'), hudLog = document.getElementById('hud-log');
-  const video = document.getElementById('cam-video'), inset = document.getElementById('cam-inset');
+  const inset = document.getElementById('cam-inset');
+  // the snapshot image is created here, so the page never ships an <img> without a source
+  const camImg = Object.assign(new Image(), { alt: "The camera at this moment, with YOLO's masks" });
+  inset.prepend(camImg);
+  const camWhen = document.getElementById('cam-when'), camText = document.getElementById('cam-text'), hudTree = document.getElementById('hud-tree');
+  let shownCard = null;
   const phone = matchMedia('(max-width: 720px)');
   let view, data, speed = 16, playing = false, last = 0, t = 0, end = 1;
 
@@ -31,16 +36,19 @@ const BASE = import.meta.env.BASE_URL;
     hudOffset.textContent = off ? `${(Math.hypot(off[1], off[2]) * 100).toFixed(0)} cm` : '–';
     const line = at(data.log, t);
     hudLog.textContent = line && t - line[0] < 25 ? line[2] : ' ';
-    if (data.video && video.readyState >= 1) {
-      const vt = Math.min(Math.max(t - data.video.t0, 0), video.duration);
-      const rate = playing && speed <= 16 ? speed : 0;
-      if (rate) {
-        if (video.playbackRate !== rate) video.playbackRate = rate;
-        if (video.paused) video.play().catch(() => {});
-      } else if (!video.paused) video.pause();
-      // resync when the replay and the video drift apart (always, when paused or too fast to play)
-      if (!video.seeking && Math.abs(video.currentTime - vt) > (rate ? 2 + rate * 0.2 : 0.3)) video.currentTime = vt;
+    // the camera at the latest event, with what mapping or the tree said
+    const card = at(data.cards, t);
+    if (card !== shownCard) {
+      shownCard = card;
+      inset.hidden = !card;
+      if (card) {
+        camImg.src = `${BASE}img/events/${card[1]}`;
+        camWhen.textContent = fmtT(card[0]);
+        camText.textContent = (card[3] === 'tree' ? 'Tree: ' : 'Mapping: ') + card[2];
+      }
     }
+    const tl = at(data.tree_log?.filter((x) => !x[1].startsWith('Message from')), t);
+    hudTree.textContent = tl ? tl[1].replace(/^Setting mapping to target\s*/, 'targeting ').replace(/ and (not )?locking map$/, '') : '–';
   }
 
   function frame(now) {
@@ -54,7 +62,6 @@ const BASE = import.meta.env.BASE_URL;
   }
   function setPlaying(on) {
     playing = on;
-    if (!on && data?.video) video.pause();
     play.textContent = on ? 'Pause' : t >= end ? 'Replay' : 'Play';
     play.setAttribute('aria-pressed', String(on));
     if (on) {
@@ -86,10 +93,6 @@ const BASE = import.meta.env.BASE_URL;
       el.textContent = name;
       el.title = name;
       ph.appendChild(el);
-    }
-    if (d.video) {
-      video.src = `${BASE}${d.video.src}`;
-      inset.hidden = false;
     }
     t = d.start || 0;
     update();

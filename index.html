@@ -17,8 +17,7 @@
       <p id="hero-blurb">A real run of Talos's mission in the Nereus simulator, replayed from above. The course was moved 72 cm off the map Talos was given, and the torpedo another 1.27 m; watch mapping move its map as each prop is seen.</p>
     </div>
     <figure class="cam-inset" id="cam-inset" hidden>
-      <video id="cam-video" muted playsinline preload="metadata"></video>
-      <figcaption>Forward camera, YOLO masks</figcaption>
+      <figcaption><span id="cam-when"></span> <span id="cam-text"></span></figcaption>
     </figure>
     <div class="dock">
       <div class="replay">
@@ -33,6 +32,7 @@
         <div class="row"><span>Mission time</span><b id="hud-t">–</b></div>
         <div class="row"><span>Mapping target</span><b id="hud-target">–</b></div>
         <div class="row"><span>Map offset</span><b id="hud-offset">–</b></div>
+        <div class="row"><span>Tree is</span><b id="hud-tree">–</b></div>
         <div class="logline" id="hud-log">&nbsp;</div>
       </div>
     </div>
@@ -45,38 +45,53 @@
 
   <article>
     <div class="prose">
-      <p>Talos is the Underwater Robotics Team's competition AUV. To score at RoboSub it has to swim through a gate, around slalom poles, fire torpedoes through holes in a board, drop markers in bins and pick objects off a table, and every one of those tasks starts with the same question: where exactly is the thing? <a href="https://github.com/osu-uwrt/riptide_perception/tree/mapping-estimator"><code>riptide_perception</code></a> answers it. This site explains how, from the pixels to the coordinate frames the autonomy and the <a href="https://zehdari.github.io/riptide-mpc-explained/">controller</a> steer by.</p>
-      <p>The package has two halves. <code>tensor_detector</code> looks at camera images and says <em>what</em> it sees and where it is relative to the camera, one frame at a time. <code>riptide_mapping</code> collects those detections over the whole run and keeps a map of the course: an estimate of every prop's position, how sure it is, and an explanation for why the course isn't where the map said it would be. Already know Kalman filters and least squares? <a href="math.html">All the math is on one page</a>, with Talos's parameters.</p>
+      <p>Talos is the Underwater Robotics Team's competition AUV. Every RoboSub task, from swimming through the gate to dropping markers in the bins, starts with the same question: where exactly is the thing? <a href="https://github.com/osu-uwrt/riptide_perception/tree/mapping-estimator"><code>riptide_perception</code></a> answers it. This site is written for a new team member: it walks through how that code works, why it is built the way it is, and how to work on it yourself. Nothing is assumed beyond some Python and high-school vectors; the maths is introduced where it is used, and it is all <a href="math.html">collected on one page</a>.</p>
+      <p>The package has two halves, and so does the site.</p>
+      <ul>
+        <li><strong>Vision</strong> (<code>tensor_detector</code>) looks at one camera image at a time and says <em>what</em> it sees and where that is relative to the camera. To do that the cameras have to be calibrated, and a neural network has to be trained to recognise the props.</li>
+        <li><strong>Mapping</strong> (<code>riptide_mapping</code>) collects those detections over the whole run and keeps a map of the course: where every prop is, how sure it is, and an explanation for why the course isn't where the map said. It publishes each prop as a coordinate frame that the behaviour trees and the <a href="https://zehdari.github.io/riptide-mpc-explained/">controller</a> steer by.</li>
+      </ul>
 
       <h2 id="pipeline">From photons to frames</h2>
-      <p>Each stage is a box below. Tap or hover one for what it does and where it lives in the code. Every detection takes the same path through all of them.</p>
+      <p>Each stage is a box below. Tap or hover one for what it does and where it lives in the code.</p>
     </div>
     <figure class="fig">
       <div class="panel" id="pipeline-graph"></div>
-      <figcaption><b>The perception pipeline.</b> Top row: one camera frame, through the detector to a 3D pose. Bottom row: mapping, which turns a stream of those poses into a map and publishes every prop as a TF frame and a pose with covariance. Autonomy chooses which props mapping is allowed to update.</figcaption>
+      <figcaption><b>The perception pipeline.</b> Top row: vision, one camera frame through the detector to a 3D pose. Bottom row: mapping, which turns a stream of those poses into a map and publishes every prop as a TF frame and a pose with covariance. The behaviour tree chooses which props mapping is allowed to update.</figcaption>
     </figure>
 
     <div class="prose">
-      <h2 id="why">Why it is harder than it looks</h2>
-      <p>A neural network that outlines the torpedo board in an image is the well-trodden part: train a YOLO model on labelled pictures and it will. What makes underwater perception hard is everything after the outline:</p>
+      <h2 id="replay">What the replay above shows</h2>
+      <p>The top of this page is a real run of the team's competition tree, <code>RepairCompMpcTree</code>, in the <a href="https://github.com/osu-uwrt/nereus">Nereus</a> simulator, with Talos's whole software stack: its cameras, the YOLO models, mapping, the EKF, the MPC and the tree, exactly as on the robot. The course was moved 72 cm from the map Talos was given, and the torpedo board another 1.27 m.</p>
       <ul>
-        <li><strong>The box is 2D.</strong> The board is 3D, tilted, and partly hidden. The detector has to pick the right depth pixels, reject the ones that belong to the pool wall behind the board, and fit a surface. (Chapters 2 and 3.)</li>
-        <li><strong>One detection is noisy, and how noisy depends on range.</strong> Stereo depth error grows with the square of distance, and a timestamp a few milliseconds off smears a detection sideways while the robot turns. (Chapter 4.)</li>
-        <li><strong>The detector is sometimes wrong.</strong> Slalom poles look like gate legs, the two bin vinyls are the same class, a reflection is a pole for one frame. Mapping has to ignore a stray detection without ignoring a prop that really is somewhere unexpected. (Chapter 5.)</li>
-        <li><strong>The map is wrong too.</strong> The prior layout comes from measuring the course by hand at the competition, and the robot's own odometry drifts metres over a run. A sighting of one prop has to correct the others, but a single badly measured prop must not drag the whole map with it. (Chapter 6.)</li>
+        <li><strong>Grey shapes</strong> are the props where Nereus put them; <strong>dashed rings</strong> are where Talos's map has them before the run.</li>
+        <li><strong>Filled dots with ellipses</strong> are mapping's estimate with its 2σ uncertainty, once the prop has been confirmed by detections. Hollow dots are estimates mapping still publishes as unconfirmed.</li>
+        <li><strong>Small dots</strong> flashing near a prop are single detections, each with a short line along the <strong>surface normal</strong> the detector measured: for a board facing Talos, it points back at the camera.</li>
+        <li><strong>Little circles</strong> are objects that live in another prop's frame: the torpedo holes, the table's items and baskets, the bins' targets.</li>
+        <li>The <strong>camera card</strong> shows what the camera saw, with YOLO's masks, at the last thing mapping or the tree reported.</li>
       </ul>
-      <p>The chapters take these in order. Every interactive figure runs a JavaScript port of the team's code: the detector's geometry and the mapping estimator, line for line, checked against the Python by a test suite. The real data comes from the <a href="https://github.com/osu-uwrt/nereus">Nereus</a> simulator running Talos's full software stack: its cameras, the YOLO models, mapping, the behaviour trees and the MPC, exactly as on the robot.</p>
+      <p>Two things go wrong in this run, and they are the most instructive parts of it: the badly placed torpedo pulls the whole map with it instead of being written off, and that leaves Talos unable to lock onto one of the table's baskets. <a href="mission.html">Chapter 10</a> goes through both.</p>
 
       <h2 id="chapters">The chapters</h2>
+      <p class="part-label">Vision</p>
       <ol class="chapter-list">
-        <li><a href="detector.html"><strong>Cameras and the detector.</strong></a> Two stereo cameras, two YOLO segmentation models, and how each image is paired with the depth map taken at the same instant.</li>
+        <li><a href="calibration.html"><strong>Cameras and calibration.</strong></a> How a camera turns the world into pixels, why the factory calibration is wrong underwater, and how the team calibrates with a ChArUco board.</li>
+        <li><a href="training.html"><strong>Training the detector.</strong></a> Recording the props, labelling masks with SAM, Nereus's synthetic images, and the augmentations that keep the model honest.</li>
+        <li><a href="detector.html"><strong>The detector, frame by frame.</strong></a> Pairing each image with its depth map, running YOLO, and what gets published.</li>
         <li><a href="pose.html"><strong>From a mask to a pose.</strong></a> Sampling the mask, back-projecting through the depth, throwing out the background, and fitting a plane.</li>
-        <li><a href="composites.html"><strong>Props made of several pieces.</strong></a> The torpedo board, the gate halves, the table and the slalom poles: detections that only make sense together.</li>
+        <li><a href="composites.html"><strong>Props made of several pieces.</strong></a> The torpedo board and its holes, the gate signs and the slalom poles.</li>
+      </ol>
+      <p class="part-label">Mapping</p>
+      <ol class="chapter-list" start="6">
         <li><a href="noise.html"><strong>How far to trust a detection.</strong></a> A covariance for every detection, from range, bearing and how fast the robot is moving.</li>
         <li><a href="tracking.html"><strong>Tracking one object.</strong></a> A Kalman filter per prop, the gate that rejects lookalikes, and why the first detections wait until they agree.</li>
         <li><a href="map.html"><strong>The course map.</strong></a> One shared offset for odometry drift, a deviation per prop for layout error, and a robust solve that decides which is which.</li>
-        <li><a href="frames.html"><strong>Frames, targets and autonomy.</strong></a> What mapping publishes, how the behaviour trees drive it, and the special cases: two identical bins and a table fit to its baskets.</li>
-        <li><a href="mission.html"><strong>One mission in Nereus.</strong></a> The replay above, slowed down: every estimate against the truth, and what mapping said at each step.</li>
+        <li><a href="frames.html"><strong>Frames, targets and the mission tree.</strong></a> What mapping publishes and what <code>RepairCompMpcTree</code> asks of it, task by task.</li>
+        <li><a href="mission.html"><strong>One mission in Nereus.</strong></a> The replay above, slowed down: every estimate against the truth, and what went wrong.</li>
+      </ol>
+      <p class="part-label">Your turn</p>
+      <ol class="chapter-list" start="11">
+        <li><a href="workflow.html"><strong>Working on it yourself.</strong></a> Running the stack in Nereus, recording and replaying bags, tuning, and retraining a model.</li>
       </ol>
     </div>
     <nav class="next" aria-label="Chapter navigation"></nav>

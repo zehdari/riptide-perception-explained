@@ -1,7 +1,7 @@
 // Reports elements wider than the viewport on a phone-sized screen, per page.
 import { chromium } from 'playwright';
 const base = process.argv[2] || 'http://127.0.0.1:5199/riptide-perception-explained/';
-const pages = ['index.html','detector.html','pose.html','composites.html','noise.html','tracking.html','map.html','frames.html','mission.html','math.html'];
+const pages = ['index.html','calibration.html','training.html','detector.html','pose.html','composites.html','noise.html','tracking.html','map.html','frames.html','mission.html','workflow.html','math.html'];
 const browser = await chromium.launch({ executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const p = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
 for (const pg of pages) {

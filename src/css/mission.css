@@ -14,3 +14,12 @@
 #final-table .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.45rem; }
 @media (max-width: 720px) { .replay-panel canvas { aspect-ratio: 3 / 4; } }
 .viewer-clip { display: block; width: 100%; border-radius: 10px; background: #0f2633; }
+.replay-phases { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 0.8rem 0.5rem; background: rgba(243, 247, 247, 0.92); }
+.replay-phases button { font: inherit; font-family: var(--sans); font-size: 0.78rem; border: 1px solid var(--rule); background: var(--paper); color: var(--ink-2); border-radius: 999px; padding: 0.2rem 0.65rem; cursor: pointer; }
+.replay-phases button:hover { border-color: var(--ink-2); color: var(--ink); }
+.replay-card { display: grid; grid-template-columns: minmax(0, 15rem) 1fr; gap: 0.8rem; align-items: start; padding: 0.7rem 0.8rem 0.8rem; background: #0f2633; color: #e3eef1; font-family: var(--sans); font-size: 0.82rem; line-height: 1.4; }
+.replay-card img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 4px; background: #1c3c4d; display: block; }
+.replay-card p { margin: 0 0 0.4rem; }
+.replay-card .tree { color: #8fb3bd; }
+#warning-map { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 70vh; background: linear-gradient(180deg, #e3f1f3, var(--water)); }
+@media (max-width: 720px) { .replay-card { grid-template-columns: 1fr; } }

@@ -78,6 +78,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
 .rail .brand small { display: block; font-weight: 450; font-stretch: 100%; color: var(--ink-2); font-size: 0.82rem; margin-top: 0.25rem; }
 .rail ol { list-style: none; padding: 0; margin: 0; counter-reset: ch -1; }
 .rail ol > li { counter-increment: ch; margin: 0; }
+.rail ol > li.part { counter-increment: none; margin: 1rem 0 0.15rem; font-size: 0.72rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 .rail .toc li { margin: 0; }
 .rail ol > li > a { display: grid; grid-template-columns: 1.6rem 1fr; padding: 0.42rem 0; text-decoration: none; color: var(--ink-2); }
 .rail ol > li > a::before { content: counter(ch); color: var(--muted); font-variant-numeric: tabular-nums; }

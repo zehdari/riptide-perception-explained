@@ -1,5 +1,5 @@
 import { setup } from '../layout.js';
-import '../css/detector.css';
+import '../css/vision.css';
 import { Graph } from '../viz/graph.js';
 import { FrameView, loadFrame, picker, classColor } from '../viz/detector_frames.js';
 
@@ -29,7 +29,7 @@ setup();
 // ---------- frames with masks ----------
 // Frames from tools/frame_pipeline.py (public/data/frames). Add a frame here to show it.
 const FRAMES = [
-  { name: 'gate_far_0', label: 'Gate and slalom' },
+  { name: 'gate_far_0', label: 'Gate (false slalom)' },
   { name: 'slalom_0', label: 'Slalom' },
   { name: 'f0003_ffc', label: 'Torpedo board' },
   { name: 'f0001_ffc', label: 'Board at 37°' },
@@ -61,9 +61,9 @@ const FRAMES = [
   const txt = {
     yolo: 'YOLO results: boxes, masks, classes and confidences for the frame. Every mask is painted into one full-frame mask image before any box is processed.',
     torpedo: 'Forward camera only (torpedo_task_camera): fire, blood, circle, ambulance, fire_engine are held until the frame is done, then resolved together into the torpedo center and its four labeled openings.',
-    pairs: 'compass + hammer_and_wrench → gate_repair, buoy + sos → gate_rescue, and (when enabled) warning + helmet → table. Both members in one frame: one combined detection. Only one: each goes down the generic path under its own name.',
+    pairs: 'compass + hammer_and_wrench → gate_repair, buoy + sos → gate_rescue (and warning + helmet → table, which the current tree switches off). Both members in one frame: one combined detection. Only one: each goes down the generic path under its own name.',
     slalom: 'Slalom poles: a single depth sample at the box centre, the closest pole kept, orientation taken from the slalom_parent_frame TF.',
-    plane: 'Everything else: grid-sample the mask inside the box, back-project with the depth image, filter, fit a plane by SVD. One detection per box. Chapter 2.',
+    plane: 'Everything else: grid-sample the mask inside the box, back-project with the depth image, filter, fit a plane by SVD. One detection per box. Chapter 4.',
     out: 'detected_objects: a Detection3DArray in the camera optical frame, stamped with the image stamp.',
   };
   new Graph(document.getElementById('route-graph'), {

@@ -1,5 +1,5 @@
 import { setup } from '../layout.js';
-import '../css/detector.css';
+import '../css/vision.css';
 import { loadFrame, picker, s, BASE } from '../viz/detector_frames.js';
 import { runBox } from '../viz/pose_sample.js';
 import { Cloud3D } from '../viz/pose3d.js';

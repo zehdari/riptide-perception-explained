@@ -1,5 +1,6 @@
 import { setup } from '../layout.js';
 import '../css/tracking.css';
+import '../css/mapping.css';
 import { LineChart } from '../viz/chart.js';
 import { MapEstimator, EstimatorSettings, detection_covariance } from '../engine/estimator.js';
 import { cholesky, eigh, matvec, add, scale, eye } from '../engine/linalg.js';

@@ -3,19 +3,23 @@ import katex from 'katex';
 
 export const chapters = [
   { href: 'index.html', title: 'Overview' },
-  { href: 'detector.html', title: 'Cameras and the detector' },
+  { href: 'calibration.html', title: 'Cameras and calibration', part: 'Vision' },
+  { href: 'training.html', title: 'Training the detector' },
+  { href: 'detector.html', title: 'The detector, frame by frame' },
   { href: 'pose.html', title: 'From a mask to a pose' },
   { href: 'composites.html', title: 'Props made of several pieces' },
-  { href: 'noise.html', title: 'How far to trust a detection' },
+  { href: 'noise.html', title: 'How far to trust a detection', part: 'Mapping' },
   { href: 'tracking.html', title: 'Tracking one object' },
   { href: 'map.html', title: 'The course map' },
-  { href: 'frames.html', title: 'Frames, targets and autonomy' },
+  { href: 'frames.html', title: 'Frames, targets and the mission tree' },
   { href: 'mission.html', title: 'One mission in Nereus' },
+  { href: 'workflow.html', title: 'Working on it yourself', part: 'Your turn' },
   { href: 'math.html', title: 'The math in one place', appendix: 'A' },
 ];
 
 // Chapter sections whose equations are collected in the appendix, and where.
 const APPENDIX = {
+  'calibration.html': { pinhole: 'calibration', distortion: 'calibration', stereo: 'calibration' },
   'pose.html': { backproject: 'pose', gate: 'pose', plane: 'pose' },
   'composites.html': { torpedo: 'composites' },
   'noise.html': { model: 'noise', inflation: 'noise' },
@@ -134,7 +138,7 @@ function buildRail() {
   rail.innerHTML = `
     <a class="brand" href="index.html">How Talos sees<small>Perception and mapping for an AUV, explained</small></a>
     <ol>${chapters
-      .map((c) => `<li${c.appendix ? ` class="appendix"` : ''}><a href="${c.href}"${c.href === here ? ' aria-current="page"' : ''}>${c.title}</a>${c.href === here ? '<ul class="toc"></ul>' : ''}</li>`)
+      .map((c) => `${c.part ? `<li class="part" aria-hidden="true">${c.part}</li>` : ''}<li${c.appendix ? ` class="appendix"` : ''}><a href="${c.href}"${c.href === here ? ' aria-current="page"' : ''}>${c.title}</a>${c.href === here ? '<ul class="toc"></ul>' : ''}</li>`)
       .join('')}</ol>
     <div class="foot">Code: <a href="${REPO}">riptide_perception</a><br>Companion: <a href="https://zehdari.github.io/riptide-mpc-explained/">How Talos flies</a><br>Simulator: <a href="https://github.com/osu-uwrt/nereus">Nereus</a><br>Underwater Robotics Team, Ohio State</div>`;
   const toc = rail.querySelector('.toc');

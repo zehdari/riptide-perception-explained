@@ -36,8 +36,19 @@
         </tbody>
       </table>
 
+      <h2 id="calibration">The camera model</h2>
+      <p class="from">From <a href="calibration.html">Chapter 1</a>.</p>
+      <p>A point <span class="m">(x, y, z)</span> in the camera frame lands on pixel <span class="m">(u, v)</span> through the intrinsics:</p>
+      <div class="M">u = f_x\,\frac{x}{z} + c_x, \qquad v = f_y\,\frac{y}{z} + c_y \qquad\Longleftrightarrow\qquad \begin{bmatrix} u \\ v \\ 1 \end{bmatrix} \propto \underbrace{\begin{bmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{bmatrix}}_{K} \begin{bmatrix} x \\ y \\ z \end{bmatrix}</div>
+      <p>with the lens distortion applied to the normalized coordinates <span class="m">x' = x/z,\ y' = y/z,\ r^2 = x'^2 + y'^2</span> first (OpenCV's plumb-bob model, coefficients <span class="m">[k_1, k_2, p_1, p_2, k_3]</span>):</p>
+      <div class="M" data-narrow="\begin{gathered} x'' = x'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + 2p_1 x'y' + p_2(r^2 + 2x'^2) \\[4pt] y'' = y'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + p_1(r^2 + 2y'^2) + 2p_2 x'y' \end{gathered}">x'' = x'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + 2p_1 x'y' + p_2(r^2 + 2x'^2), \qquad y'' = y'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + p_1(r^2 + 2y'^2) + 2p_2 x'y'</div>
+      <p>Underwater, rays bend at the flat port by Snell's law, which narrows the view and adds radial distortion, so the camera is calibrated in the water:</p>
+      <div class="M">n_\text{air} \sin\theta_a = n_\text{water} \sin\theta_w, \qquad n_\text{water} \approx 1.33</div>
+      <p>From a rectified stereo pair with baseline <span class="m">B</span>, depth and its error from a disparity <span class="m">d</span>:</p>
+      <div class="M">z = \frac{f\,B}{d}, \qquad \delta z \approx \frac{z^2}{f\,B}\,\delta d</div>
+
       <h2 id="pose">A mask becomes a pose</h2>
-      <p class="from">From <a href="pose.html">Chapter 2</a>.</p>
+      <p class="from">From <a href="pose.html">Chapter 4</a>.</p>
       <p>Grid-sample the mask every 8 px (at most 500 samples) and back-project each through its depth <span class="m">z</span>:</p>
       <div class="M">x = \frac{(u - c_x)\, z}{f_x}, \qquad y = \frac{(v - c_y)\, z}{f_y}, \qquad \bp = (x,\, y,\, z)</div>
       <p>Keep the points whose depth is within three robust standard deviations of the median (the depth gate):</p>
@@ -49,7 +60,7 @@
       <p class="eq-note"><span class="m">\mathbf a</span> is the camera <span class="m">x</span> axis, or <span class="m">y</span> when the normal is within 26° of <span class="m">x</span>; the first column is negated if <span class="m">\det R &lt; 0</span>.</p>
 
       <h2 id="composites">The torpedo board</h2>
-      <p class="from">From <a href="composites.html">Chapter 3</a>.</p>
+      <p class="from">From <a href="composites.html">Chapter 5</a>.</p>
       <p>One plane is fitted to the pooled points of every symbol on the board (fire and blood required, ambulance and fire engine optional), anchored at the mean symbol centroid <span class="m">\mathbf a</span>. Each symbol and circle centre is then intersected with that plane along its camera ray:</p>
       <div class="M">\mathbf d = \frac{K^{-1}(u, v, 1)^\top}{\lVert K^{-1}(u, v, 1)^\top \rVert}, \qquad t = \frac{\bn \cdot \mathbf a}{\bn \cdot \mathbf d}, \qquad \mathbf p = t\,\mathbf d</div>
       <p>With an in-plane basis <span class="m">(\mathbf e_u, \mathbf e_v)</span>, the board centre is the middle of the projected points' extent, and the four holes split two and two along the fire-to-blood axis:</p>
@@ -57,7 +68,7 @@
       <p class="eq-note">The two smallest <span class="m">s_h</span> are fire's holes; of each pair, the one nearer its symbol is the large hole.</p>
 
       <h2 id="noise">How much a detection is worth</h2>
-      <p class="from">From <a href="noise.html">Chapter 4</a>.</p>
+      <p class="from">From <a href="noise.html">Chapter 6</a>.</p>
       <p>Standard deviation across the camera ray and along it, at range <span class="m">r</span>, with the vehicle turning at <span class="m">\omega</span> and moving at <span class="m">v</span> and a stamp error <span class="m">t_s</span>:</p>
       <div class="M">\sigma_\perp^2 = (b + k_\perp r)^2 + (\omega\, t_s\, r)^2, \qquad \sigma_\parallel = b + k_\parallel\, r + k_2\, r^2</div>
       <div class="M">\Rm_\text{cam} = \sigma_\perp^2 I + (\sigma_\parallel^2 - \sigma_\perp^2)\,\hat u \hat u^\top + (v t_s)^2 I, \qquad \Rm = \Rm_{pc}\, \Rm_\text{cam}\, \Rm_{pc}^\top</div>
@@ -66,7 +77,7 @@
       <p>Detected yaw is the heading of the normal in the parent frame, <span class="m">\operatorname{atan2}(n_y, n_x)</span>, with a fixed 3° standard deviation, inflated the same way.</p>
 
       <h2 id="tracking">Tracking one object</h2>
-      <p class="from">From <a href="tracking.html">Chapter 5</a>.</p>
+      <p class="from">From <a href="tracking.html">Chapter 7</a>.</p>
       <p>A three-state Kalman update in the object's parent frame, in Joseph form:</p>
       <div class="M" data-narrow="\begin{gathered} \boldsymbol\nu = \bz - \hat\bx, \quad \mathbf S = \P + \Rm, \quad \K = \P\mathbf S^{-1} \\[6pt] \hat\bx \leftarrow \hat\bx + \K\boldsymbol\nu, \qquad \P \leftarrow (I - \K)\,\P\,(I - \K)^\top + \K\Rm\K^\top \end{gathered}">\boldsymbol\nu = \bz - \hat\bx, \quad \mathbf S = \P + \Rm, \quad \K = \P\mathbf S^{-1}, \qquad \hat\bx \leftarrow \hat\bx + \K\boldsymbol\nu, \qquad \P \leftarrow (I - \K)\,\P\,(I - \K)^\top + \K\Rm\K^\top</div>
       <p>Once the track has 10 accepted detections, a detection is rejected when</p>
@@ -78,7 +89,7 @@
       <div class="M">(\bar\bz - \hat\bp)^\top \Big(\boldsymbol\Sigma_{\hat\bp} + \tfrac1m \textstyle\sum_{j} \Rm_j\Big)^{-1} (\bar\bz - \hat\bp) \;>\; 16.27</div>
 
       <h2 id="map">The course map</h2>
-      <p class="from">From <a href="map.html">Chapter 6</a>.</p>
+      <p class="from">From <a href="map.html">Chapter 8</a>.</p>
       <p>Every map-parented object is the prior layout, turned by the course yaw, plus where the course sits in odometry, plus that object's own layout error:</p>
       <div class="M">\bp_i = \Rm(\psi)\,\bp_i^{\,0} + \bo + \bd_i</div>
       <p>The offset random-walks with distance travelled and time:</p>
@@ -95,7 +106,7 @@
       <p class="eq-note"><span class="m">\mathbf A</span> is the normal matrix at the solution, <span class="m">\mathbf J = [\,\partial \Rm(\psi)\bp^{\,0}_i/\partial\psi \;\; I \;\; I\,]</span>, and <span class="m">\Delta s, \Delta t</span> the travel since the newest fix.</p>
 
       <h2 id="published">What is published</h2>
-      <p class="from">From <a href="frames.html">Chapter 7</a>.</p>
+      <p class="from">From <a href="frames.html">Chapter 9</a>.</p>
       <p>Until an object is confirmed by fresh detections while targeted (10, or 3 that agree with a known estimate), its published covariance is floored:</p>
       <div class="M">\boldsymbol\Sigma_\text{pub} = \boldsymbol\Sigma + \operatorname{diag}\big(\max(1 - \Sigma_{jj},\ 0)\big), \qquad \sigma^2_{\text{roll}} = \sigma^2_{\text{pitch}} = 0.1, \qquad \sigma^2_\text{yaw} \ge 0.1</div>
 

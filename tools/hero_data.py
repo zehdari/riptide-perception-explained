@@ -16,6 +16,38 @@ d = json.load(open(args.mission))
 PROPS = ['gate', 'slalom_parent', 'torpedo', 'bin', 'table']
 TASK = {'gate': 'gate', 'slalom_parent': 'slalom', 'torpedo': 'torpedo', 'bin': 'bins', 'table': 'table'}
 
+
+CHILDREN = ['gate_repair', 'gate_rescue', 'slalom_front', 'slalom_middle', 'slalom_back', 'fire_hole_large', 'fire_hole_small',
+            'blood_hole_large', 'blood_hole_small', 'bin_target1', 'bin_target2', 'pill', 'plug', 'nut_and_bolt', 'bandage', 'helmet', 'warning']
+def row_at(rows, t):
+    import bisect
+    i = bisect.bisect_right([r[0] for r in rows], t) - 1
+    return rows[max(i, 0)]
+def children():
+    """Each child object's estimate placed in map by composing its published pose with its parents' (as TF does), 1 Hz."""
+    import math
+    est = d['estimates']; pri = d['priors']
+    cache = {k: [r[0] for r in v['rows']] for k, v in est.items()}
+    def in_map(name, t):
+        rows = est[name]['rows']; import bisect
+        r = rows[max(bisect.bisect_right(cache[name], t) - 1, 0)]
+        par = pri[name]['parent']
+        x, y, z, yaw = r[1], r[2], r[3], r[8]
+        if par == 'map': return x, y, yaw, r
+        px, py, pyaw, _ = in_map(par[:-len('_frame')], t)
+        c, s_ = math.cos(pyaw), math.sin(pyaw)
+        return px + c * x - s_ * y, py + s_ * x + c * y, pyaw + yaw, r
+    out = {}
+    T = int(max(r[0] for r in d['truth_path']))
+    for name in CHILDREN:
+        if name not in est: continue
+        rows = []
+        for t in range(0, T + 1):
+            x, y, _, r = in_map(name, t)
+            rows.append([t, round(x, 3), round(y, 3), 1 if r[4] < 0.999 else 0])
+        out[name] = rows
+    return out
+
 # log alignment: wall time of 'reset X' ~ mission time of the first target change naming X after the previous match
 resets = [(w, m.group(1)) for w, lvl, msg in d.get('log_wall', []) if (m := re.match(r'reset (\w+)$', msg))]
 changes = [(t, [s.strip() for s in tg.split(',') if s.strip()]) for t, tg, lock in d['targets']]
@@ -56,7 +88,9 @@ out = {
     # the priors the run actually used: each map object's first published pose (offset still zero)
     'priors': {k: {'parent': 'map', 'p': d['estimates'][k]['rows'][0][1:4]} for k in PROPS if k in d['estimates']},
     'estimates': {k: {'rows': [r[:8] for r in d['estimates'][k]['rows']]} for k in PROPS if k in d['estimates']},
-    'detections': [{k: x[k] for k in ('t', 'c', 'p', 'f')} for x in d['detections'] if x.get('f') == 'map' and x['c'] in PROPS],
+    # every detection in map (t, class, x, y, normal x, normal y)
+    'detections': [[x['t'], x['c'], x['pm'][0], x['pm'][1], x['n'][0], x['n'][1]] for x in d['detections'] if 'pm' in x],
+    'children': children(),
     'truth_path': [r for r in d['truth_path']],
     'targets': d['targets'], 'offset': d['offset'], 'log': log, 'tree_log': tree_log, 'phases': phases,
 }

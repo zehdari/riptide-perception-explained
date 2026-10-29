@@ -1,5 +1,5 @@
 import { setup } from '../layout.js';
-import '../css/detector.css';
+import '../css/vision.css';
 import { FrameView, loadFrame, picker, classColor, s } from '../viz/detector_frames.js';
 import { runBox } from '../viz/pose_sample.js';
 import { fit_plane, ray_plane_intersection, cross, unit } from '../engine/geometry.js';
@@ -15,37 +15,6 @@ const Kmat = (f) => [[f.K[0], 0, f.K[2]], [0, f.K[4], f.K[5]], [0, 0, 1]];
 const center = (b) => [(b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2];
 const HOLES = ['fire_hole_large', 'fire_hole_small', 'blood_hole_large', 'blood_hole_small'];
 const HOLE_LABEL = { fire_hole_large: 'fire L', fire_hole_small: 'fire S', blood_hole_large: 'blood L', blood_hole_small: 'blood S' };
-
-// ---------- table pair sketch ----------
-{
-  const g = document.getElementById('table-diagram');
-  const ink = 'var(--ink)', muted = 'var(--muted)';
-  s('rect', { x: 170, y: 60, width: 300, height: 180, rx: 6, fill: 'var(--paper)', stroke: 'var(--ink-2)', 'stroke-width': 1.5 }, g);
-  const W = [215, 150], H = [425, 150];
-  s('line', { x1: W[0], y1: W[1], x2: H[0], y2: H[1], stroke: muted, 'stroke-width': 1.5, 'stroke-dasharray': '6 5' }, g);
-  for (const [p, name] of [[W, 'warning'], [H, 'helmet']]) {
-    s('rect', { x: p[0] - 20, y: p[1] - 20, width: 40, height: 40, rx: 4, fill: classColor(name, 0.35), stroke: classColor(name), 'stroke-width': 2 }, g);
-    s('text', { x: p[0], y: p[1] + 40, 'text-anchor': 'middle' }, g).textContent = name;
-  }
-  const C = [320, 150];
-  const arrow = (to, color, label, lx, ly) => {
-    s('line', { x1: C[0], y1: C[1], x2: to[0], y2: to[1], stroke: color, 'stroke-width': 3 }, g);
-    const a = Math.atan2(to[1] - C[1], to[0] - C[0]);
-    s('path', { d: `M${to[0]},${to[1]} L${to[0] - 12 * Math.cos(a - 0.4)},${to[1] - 12 * Math.sin(a - 0.4)} L${to[0] - 12 * Math.cos(a + 0.4)},${to[1] - 12 * Math.sin(a + 0.4)}Z`, fill: color }, g);
-    const t = s('text', { x: lx, y: ly, fill: color }, g);
-    t.textContent = label;
-    t.style.fill = color;
-    t.style.fontWeight = 600;
-  };
-  // across = up × (helmet − warning): helmet is +x on screen, up out of the page → across points up the screen
-  arrow([C[0], 75], 'var(--accent)', 'table +x', C[0] + 10, 92);
-  s('circle', { cx: C[0], cy: C[1], r: 9, fill: 'var(--paper)', stroke: ink, 'stroke-width': 2 }, g);
-  s('circle', { cx: C[0], cy: C[1], r: 2.5, fill: ink }, g);
-  s('text', { x: C[0] + 14, y: C[1] + 22 }, g).textContent = 'table +z: up';
-  s('text', { x: 20, y: 30 }, g).textContent = 'warning → helmet, horizontal';
-  s('text', { x: 500, y: 150 }, g).textContent = 'basket-free edges';
-  s('text', { x: 500, y: 168 }, g).textContent = 'are ±x';
-}
 
 // ---------- torpedo layout from a head-on frame ----------
 // Board coordinates (metres, x right, y up, origin at the published torpedo centre) of every symbol and opening,

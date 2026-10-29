@@ -2,6 +2,7 @@ import { setup } from '../layout.js';
 import { Graph } from '../viz/graph.js';
 import { BinaryClassifier, State } from '../engine/cluster.js';
 import '../css/frames.css';
+import '../css/mapping.css';
 
 setup();
 const BASE = import.meta.env.BASE_URL;
@@ -20,10 +21,10 @@ function tfTree() {
     N('base', 315, 355, 'talos/base_link', 'Talos itself, from the EKF.'),
     N('cam', 470, 355, 'ffc · dfc optical', 'The two cameras\' optical frames (z forward). Detections arrive in these; mapping looks up the transform to each object\'s parent at the detection\'s stamp.'),
     N('map', 180, 135, 'map', 'Set once by the AprilTag calibration: a chameleon_tf node averages the board\'s observed pose and adopts it for world → map (x, y and yaw free; z, roll, pitch locked). The odometry frame re-anchored to the course. Map objects\' detections are fused here.'),
-    N('offset', 315, 135, 'offset', 'map → offset, published by mapping: a pure translation, where the course sits in odometry (Chapter 6). Every map object hangs off it.'),
+    N('offset', 315, 135, 'offset', 'map → offset, published by mapping: a pure translation, where the course sits in odometry (Chapter 8). Every map object hangs off it.'),
     N('gate', 470, 30, 'gate', 'gate_frame: prior + deviation from offset. The estimate autonomy drives through.'),
     N('slalom', 470, 82, 'slalom_parent', 'slalom_parent_frame: orientation locked to the config; the three pole sets hang off it.'),
-    N('torpedo', 470, 135, 'torpedo', 'torpedo_frame: the board centre the detector computes from its symbols (Chapter 3).'),
+    N('torpedo', 470, 135, 'torpedo', 'torpedo_frame: the board centre the detector computes from its symbols (Chapter 5).'),
     N('bin', 470, 188, 'bin', 'bin_frame: seen by the down camera, orientation from the config.'),
     N('table', 470, 240, 'table', 'table_frame: moved and turned by center_table_on_baskets once the baskets are mapped.'),
     N('pre', 470, 292, 'pre_* waypoints', 'pre_torpedo_pose, pre_bin_pose, pre_table_pose, pre_return_home: map objects nothing ever detects. They exist to move with the offset, so a waypoint near a prop shifts with it.'),
@@ -243,3 +244,33 @@ async function binaryClassifier() {
 tfTree();
 thresholds();
 binaryClassifier();
+
+// ---------- RepairCompMpcTree, task by task ----------
+{
+  const X = 'https://github.com/osu-uwrt/riptide_autonomy/blob/autonomy-mapping/trees/RepairCompMpcTree.xml';
+  const sig = (e) => `${e} (≈${(Math.sqrt(e / Math.sqrt(3)) * 100).toFixed(e < 0.01 ? 1 : 0)} cm)`;
+  const tasks = [
+    ['Start', 'none', 'none, map locked', 'nothing', 'Waits for the kill switch, locks the map with an empty target, dives.', 1807],
+    ['Gate', 'ffc (default)', 'none, map stays locked', 'nothing: its searches are disabled', 'Flies a path through the prior <code>gate_repair_frame</code>; a false detection here (a gate leg called a slalom pole) is ignored because the map is locked.', 1174],
+    ['Slalom', 'ffc (assumed)', '<code>slalom_parent</code>', `MiniSearchMpc, ${sig(0.3)}, 15 s`, 'Carries on regardless, locks the map, follows a path through the three pole frames.', 2492],
+    ['Random pinger', 'n/a', 'none, map locked', 'acoustics, 10 s at each candidate', 'Defaults to torpedo first.', 1884],
+    ['Torpedo', 'ffc', '<code>torpedo</code>', `SearchMpc, ${sig(0.0025)}, 100 s`, 'Logs an error and goes on to the shot anyway.', 2996],
+    ['Torpedo holes', 'ffc', '<code>fire_hole_large,fire_hole_small,</code>', `both ${sig(0.0005)}, hold up to 30 s`, 'Locks the map and shoots at whatever the estimates are.', 2383],
+    ['Table baskets', 'dfc', '<code>helmet</code>, then <code>warning</code> (all six table props as background targets)', `DownwardSearchMpc each, ${sig(0.0005)}, 60 s; then both within 1 s`, 'No <code>center_table_on_baskets</code>: "the table keeps its prior". Table pair mode is switched off.', 1706],
+    ['Table pickups ×4', 'dfc', 'the item (<code>bandage</code>, <code>pill</code>, <code>nut_and_bolt</code>, <code>plug</code>)', `DownwardSearchMpc ${sig(0.5)}, 180 s; hover ${sig(0.0005)} up to 5 s`, 'Locks the map and grabs on the current estimate; drops in the helmet or warning basket.', 3219],
+    ['Bins', 'dfc', 'binary classifier on <code>fire</code> → <code>bin_target1</code>, then <code>bin_target2</code>', `DownwardSearchMpc ${sig(0.02)}, 120 s; hover ${sig(0.0005)} 3 s`, 'If starting the classifier fails, the whole bins task is skipped.', 178],
+    ['Magnets', 'ffc', '<code>fit_bin_geometry</code>, classifier on <code>magnet</code>', `MiniSearchMpc ${sig(1.25)}, 20 s`, 'A classifier left running by the bins makes this task fail at the start.', 1379],
+    ['Return home', 'n/a', 'none', 'nothing', 'Path through the prior <code>pre_return_home</code> and <code>gate_frame</code>.', 543],
+  ];
+  const host = document.getElementById('task-cards');
+  host.innerHTML = tasks.map(([name, cam, target, wait, fail, line]) => `
+    <section class="task">
+      <h3><a href="${X}#L${line}">${name}</a></h3>
+      <dl>
+        <dt>Camera</dt><dd>${cam}</dd>
+        <dt>Target</dt><dd>${target}</dd>
+        <dt>Waits for</dt><dd>${wait}</dd>
+        <dt>Then</dt><dd>${fail}</dd>
+      </dl>
+    </section>`).join('');
+}

@@ -113,6 +113,10 @@ export class Cloud3D {
       g.lineTo(b[0] - 9 * Math.cos(ang - 0.4), b[1] - 9 * Math.sin(ang - 0.4));
       g.lineTo(b[0] - 9 * Math.cos(ang + 0.4), b[1] - 9 * Math.sin(ang + 0.4));
       g.fill();
+      if (!dash) {
+        g.font = '600 12px Archivo Variable, system-ui, sans-serif';
+        g.fillText('normal', b[0] + 6, b[1] - 6);
+      }
     };
     if (d.fit && d.ref) arrow(d.ref, css('--muted'), true);
     if (d.fit) {

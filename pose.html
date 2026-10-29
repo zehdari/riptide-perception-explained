@@ -10,12 +10,20 @@
 <body>
 <main>
   <header class="page-head">
-    <div class="kicker">Chapter 2</div>
+    <div class="kicker">Vision · Chapter 4</div>
     <h1>From a mask to a pose</h1>
     <p class="lede">A mask says which pixels are the object. The depth image says how far away each pixel is. Put together, they give a few hundred 3D points on the object's surface, and a plane through them gives its position and the way it faces.</p>
   </header>
+  <aside class="short"><span class="label">The short version</span><ul>
+    <li>Take a grid of pixels inside the object's mask, and use the depth image and the camera's intrinsics (Chapter 1) to turn each into a 3D point.</li>
+    <li>Throw out points whose depth is far from the rest: mask edges often "bleed" onto the pool wall behind the object, and those points are metres away.</li>
+    <li>Fit a plane through what is left. Its <span class="term">normal</span>, the direction straight out of the surface, says which way the object faces; mapping turns it into the object's heading.</li>
+    <li>The position is the centre of the object's box, pushed out to the plane's depth.</li>
+    <li>The figure below does all of this on a real frame in your browser: switch the filters off and watch the plane tilt.</li>
+  </ul></aside>
   <article>
     <div class="prose">
+      <p>This is the one step of the detector that does real geometry, and it is worth understanding properly: most errors in where a prop ends up on the map start here.</p>
       <p>Almost every RoboSub prop Talos looks for is flat, or has a flat face that matters: a printed symbol on a board, the side of a basket, the top of a cylinder on the table. The detector's generic path assumes exactly that. For each box it samples the masked pixels, turns them into 3D points with the depth image, throws away the points that don't belong, and fits a plane (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py#L312-L369"><code>detection.py</code>, "Shared surface fitting"</a>; the filtering is in <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/pointcloud.py#L48-L124"><code>pointcloud.py</code></a>). The figure below runs each step on a real frame, in your browser, with the same arithmetic.</p>
 
       <h2 id="sample">Sampling the mask</h2>
@@ -46,7 +54,7 @@
       <p>The kept points (at least <code>min_points</code> = 5) define the surface. <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L36-L48"><code>fit_plane</code></a> is the least-squares plane by singular value decomposition: subtract the centroid, decompose, and the direction of least variance is the normal.</p>
       <div class="M">\bar\bp = \frac1n \sum_i \bp_i, \qquad \begin{bmatrix} (\bp_1 - \bar\bp)^\top \\ \vdots \\ (\bp_n - \bar\bp)^\top \end{bmatrix} = U \Sigma V^\top, \qquad \bn = V_{:,3}</div>
       <p>The last right-singular vector minimises the sum of squared distances from the points to the plane through <span class="m">\bar\bp</span>, so this is orthogonal regression, which treats depth error and image-plane error alike. The sign of an SVD vector is arbitrary; the detector flips it to face the camera (<span class="m">n_z &lt; 0</span>, since the camera looks along +z).</p>
-      <p>The orientation published with the detection is built so that its <strong>+z axis is the normal</strong> (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L51-L58"><code>quat_from_normal_stable</code></a>). Its x and y axes come from a fixed rule (cross the normal with the camera's x axis, or with y when the normal is nearly along x), so the same normal always gives the same quaternion and there is no singularity anywhere. The roll about the normal carries no information: a plane has no "up". Mapping uses only the direction of the normal, as the object's heading (Chapter 5).</p>
+      <p>The orientation published with the detection is built so that its <strong>+z axis is the normal</strong> (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/geometry.py#L51-L58"><code>quat_from_normal_stable</code></a>). Its x and y axes come from a fixed rule (cross the normal with the camera's x axis, or with y when the normal is nearly along x), so the same normal always gives the same quaternion and there is no singularity anywhere. The roll about the normal carries no information: a plane has no "up". Mapping uses only the direction of the normal: it rotates it into the object's parent frame and takes its heading, <span class="m">\operatorname{atan2}(n_y, n_x)</span>, as the object's yaw (Chapter 7). For a board facing Talos the normal points back toward the camera, so the yaw says which way the board faces; that is what lets autonomy line up square in front of the torpedo. The overview's replay draws each detection's normal as a short line for this reason.</p>
 
       <h2 id="centroid">Where the object is</h2>
       <p>The position is not the mean of the points. It is the centre of the bounding box, back-projected at the mean depth of the points:</p>
@@ -70,7 +78,7 @@
 
     <div class="prose">
       <h2 id="output">What comes out</h2>
-      <p>Each box that survives with five or more points becomes one <code>Detection3D</code>: the class, the box's confidence, the centroid and the quaternion, all in the camera's optical frame. The detection carries no covariance; how much one of them is worth is decided downstream (Chapter 4). A box whose points don't survive publishes nothing, and that is the common failure mode: an object whose mask lies mostly on invalid depth (the edge of the image, a reflective surface, open water with nothing behind it) is seen by the network but never reaches mapping.</p>
+      <p>Each box that survives with five or more points becomes one <code>Detection3D</code>: the class, the box's confidence, the centroid and the quaternion, all in the camera's optical frame. The detection carries no covariance; how much one of them is worth is decided downstream (Chapter 6). A box whose points don't survive publishes nothing, and that is the common failure mode: an object whose mask lies mostly on invalid depth (the edge of the image, a reflective surface, open water with nothing behind it) is seen by the network but never reaches mapping.</p>
       <p>The same samples, after filtering, also feed the debug point cloud and the dots drawn on the annotated image, so what you see in RViz or Foxglove is exactly what the plane was fitted to.</p>
     </div>
     <nav class="next" aria-label="Chapter navigation"></nav>

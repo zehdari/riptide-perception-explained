@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Working on it yourself · How Talos sees</title>
+<meta name="description" content="A practical guide for new team members: running Talos's stack in Nereus, moving the course, recording and plotting bags, poking mapping's topics and services, where to change things, tuning the noise and drift models, testing, and retraining.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23d9480f'/></svg>">
+</head>
+<body>
+<main>
+  <header class="page-head">
+    <div class="kicker">Your turn · Chapter 11</div>
+    <h1>Working on it yourself</h1>
+    <p class="lede">Everything in this site came out of a simulator run you can repeat on any team machine with the workspace built. This chapter is the recipe: run it, break it, measure it, change it.</p>
+  </header>
+  <article>
+    <aside class="short"><span class="label">The short version</span><ul>
+      <li>Nereus runs Talos's real stack, perception and mapping included. Start a Zenoh router, launch <code>sim.launch.py</code>, press Enable, start a tree.</li>
+      <li>You can move the course away from Talos's map with a scenario file, to see how mapping copes.</li>
+      <li>Record a bag, then turn it into numbers and plots with the scripts in this site's <code>tools/</code>.</li>
+      <li>Almost everything tunable is in two YAML files: <code>riptide_mapping/config/config.yaml</code> and <code>tensor_detector/config/yolo_orientation.yaml</code>.</li>
+      <li>Change one thing at a time, rerun the same scenario, compare. Then do it on the robot.</li>
+    </ul></aside>
+    <div class="prose">
+      <h2 id="setup">Set up a shell</h2>
+      <p>Every terminal below starts the same way. The UWRT stack uses Zenoh as its ROS middleware.</p>
+<pre><code>source /opt/ros/humble/setup.bash
+source ~/osu-uwrt/release/install/setup.bash
+source ~/osu-uwrt/release/nereus/build/ros-viewer/ros/setup.bash
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp</code></pre>
+      <p>Nereus itself has to be built once (<code>~/osu-uwrt/release/nereus/build.sh</code>, see its <a href="https://github.com/osu-uwrt/nereus">README</a>), and the workspace with <code>colcon build</code> as usual.</p>
+
+      <h2 id="run">Run the stack in Nereus</h2>
+      <p>In one terminal, the Zenoh router; in another, the simulator, the viewer and the whole robot stack:</p>
+<pre><code>ros2 run rmw_zenoh_cpp rmw_zenohd
+
+ros2 launch nereus sim.launch.py active_control_model:=mpc mpc_model:=sim</code></pre>
+      <p><code>mpc_model:=sim</code> gives the MPC an exact copy of the simulated vehicle, so the control is not the thing you are debugging. Wait for the detector to log that its TensorRT engine is loaded (the first start exports the engine and takes a few minutes). Then, in the viewer:</p>
+      <ol>
+        <li>Press <strong>Enable</strong> (top left). The viewer owns the kill switch in sim; nothing moves until you do.</li>
+        <li>In <strong>Autonomy</strong>, pick a tree (<code>RepairCompMpcTree</code> runs the whole competition) and press <strong>Start</strong>.</li>
+        <li>Turn on <strong>Covariance</strong> in the toolbar to see mapping's ellipsoids, and <strong>Display → Mapping ghost</strong> to see mapping's estimate drawn over the true course.</li>
+      </ol>
+      <p>To run a tree from a script instead (what the runs in Chapter 10 used), with this site's checkout:</p>
+<pre><code>python3 tools/nereus/run_tree.py \
+  ~/osu-uwrt/release/src/riptide_autonomy/trees/RepairCompMpcTree.xml /tmp/run.json 2400</code></pre>
+      <p>It sends the tree to <code>/talos/autonomy/run_tree</code> and writes the subtree stack it saw to the JSON. You still press Enable in the viewer.</p>
+
+      <h2 id="scenario">Move the course</h2>
+      <p>By default Nereus puts every prop exactly where Talos's map says, which hides most of what mapping does. A scenario file moves them. <a href="https://github.com/zehdari/riptide-perception-explained/blob/main/tools/nereus/shifted_scenario.yaml"><code>tools/nereus/shifted_scenario.yaml</code></a> is the moved course from Chapter 10: everything 0.6 m east and 0.4 m south, the torpedo another 0.9 m and 0.9 m. Edit the <code>task_placements</code>, then copy it into Nereus's pack folder, because pack paths inside it must be <em>relative</em> (an absolute path is rejected):</p>
+<pre><code>mkdir -p ~/osu-uwrt/release/nereus/content/packs/scenarios/my_course
+cp tools/nereus/shifted_scenario.yaml \
+   ~/osu-uwrt/release/nereus/content/packs/scenarios/my_course/scenario.yaml
+ros2 launch nereus sim.launch.py active_control_model:=mpc mpc_model:=sim \
+  scenario:=$HOME/osu-uwrt/release/nereus/content/packs/scenarios/my_course</code></pre>
+      <p>Good experiments: shift everything by the same amount (mapping should find the offset from the first prop it sees); move one prop a metre (it should be released, Chapter 8, and see Chapter 10 for when it isn't); turn the whole course 3° about the start (the course yaw).</p>
+
+      <h2 id="record">Record what happened</h2>
+      <p>A bag of these topics is everything the site's plots need, about 3 MB/s with the annotated images:</p>
+<pre><code>ros2 bag record -o mission --use-sim-time -e \
+ '^/talos/(mapping/.*|detected_objects|yolo_orientation/annotated/compressed|state/mapping|simulator/ground_truth|odometry/filtered|autonomy/tree_stack|state/kill)$|^/tf$|^/tf_static$'</code></pre>
+      <p>Save mapping's and the tree's log lines too, they are the most readable record of what happened: <code>ros2 launch ... 2&gt;&amp;1 | tee run.log</code>. Then, from this site's checkout:</p>
+<pre><code>python3 tools/bag_to_mission.py mission /tmp/nereus_sim/&lt;run&gt;/resolved.json mission.json --log run.log
+python3 tools/hero_data.py mission.json hero.json      # the top-down replay's data
+python3 tools/mission_data.py ...                      # Chapter 10's error and offset series</code></pre>
+      <p><code>bag_to_mission.py</code> puts every detection into the map frame with TF at its timestamp, keeps each object's published estimate and covariance, the <code>map → offset</code> transform, the targets and the tree's stack, and the simulator's true course from <code>resolved.json</code> (Nereus writes it to the run's output folder). The script's docstring lists what it writes.</p>
+
+      <h2 id="poke">Poke at mapping while it runs</h2>
+      <p>Mapping is just topics and services, so you can drive it by hand. With the map unlocked and something in view:</p>
+<pre><code>ros2 topic echo /talos/mapping/torpedo --once          # estimate + covariance
+ros2 topic echo /talos/mapping/fused                   # what each detection was fused into
+ros2 topic echo /talos/state/mapping                   # current targets and lock
+ros2 topic hz /talos/detected_objects                  # detector rate (about 10 Hz in Nereus)
+
+ros2 service call /talos/mapping_target riptide_msgs2/srv/MappingTarget \
+  "{target_info: {target_object: 'torpedo', lock_map: false}}"
+ros2 service call /talos/mapping/set_background_targets riptide_msgs2/srv/SetString "{data: 'helmet,warning'}"
+ros2 service call /talos/mapping/reset_mapping std_srvs/srv/Trigger
+ros2 service call /talos/set_camera_is_dfc std_srvs/srv/SetBool "{data: true}"   # down camera</code></pre>
+      <p>Mapping's own log says when anything important happens: <code>4 detections agree</code>, <code>30 rejections in a row … reacquiring</code>, <code>prior disagrees with the other props, released</code>. Set the log level to debug to see every rejected detection and why.</p>
+
+      <h2 id="change">Where to change things</h2>
+      <table class="params">
+        <thead><tr><th>To change</th><th>Edit</th></tr></thead>
+        <tbody>
+          <tr><td>Where props are expected</td><td><code>riptide_mapping/config/config.yaml</code>, <code>init_data</code> (also editable live with the viewer's <strong>Edit map</strong>)</td></tr>
+          <tr><td>How noisy detections are</td><td><code>config.yaml</code>, <code>noise.*</code> (Chapter 6)</td></tr>
+          <tr><td>Acquisition, gating, confirmation</td><td><code>config.yaml</code>, <code>estimator.acquire_*</code>, <code>gate_*</code>, <code>confirm_detections</code>, <code>verify_detections</code> (Chapter 7)</td></tr>
+          <tr><td>Drift, layout error, robustness</td><td><code>config.yaml</code>, <code>estimator.drift_*</code>, <code>layout_*</code>, <code>course_yaw_std_deg</code> (Chapter 8)</td></tr>
+          <tr><td>The bins' classifier</td><td><code>riptide_mapping/config/binary_classifier.yaml</code></td></tr>
+          <tr><td>Detector thresholds, which model</td><td><code>tensor_detector/config/yolo_orientation.yaml</code></td></tr>
+          <tr><td>The model itself</td><td>a new <code>.pt</code> in <code>tensor_detector/weights/</code> and its name and class map in <code>yolo_orientation.yaml</code> (Chapter 2)</td></tr>
+          <tr><td>What the mission asks for</td><td>the tree in <code>riptide_autonomy/trees/</code> (Chapter 9)</td></tr>
+        </tbody>
+      </table>
+      <p>Mapping reads <code>estimator.*</code> and <code>noise.*</code> again whenever a parameter changes, so <code>ros2 param set /talos/riptide_mapping2 estimator.acquire_detections 3</code> takes effect at once. A changed prior moves that object immediately; a changed parent waits for <code>mapping/reset_mapping</code>.</p>
+
+      <h2 id="tune">A tuning recipe</h2>
+      <ol>
+        <li><strong>Measure the detection noise.</strong> Hold Talos still in front of a prop at three or four ranges for 15 s each and compute the scatter, as Chapter 6 did in Nereus (<code>tools/nereus/tour.py</code> places and holds the robot; <code>tools/noise_measure.py</code> computes the scatter). Do it on the robot, in the pool. Set <code>noise.*</code> so the model's curves sit a little above what you measured.</li>
+        <li><strong>Measure the drift.</strong> Swim a long loop that passes one prop twice, and look at how far the second sighting lands from the first. That is the odometry drift over the distance in between; set <code>drift_var_per_m_xy</code> from it. Too large, and mapping explains layout errors as drift (Chapter 10); too small, and it won't follow real drift.</li>
+        <li><strong>Check the layout error.</strong> After a run, compare each prop's deviation with <code>layout_std_xy</code>. If a prop is routinely more than a metre off, measure it again rather than widen the prior.</li>
+        <li><strong>Rerun the same scenario</strong> after each change and compare the errors, not just whether the tree succeeded: every task fails soft, so a tree can succeed with half its props wrong.</li>
+      </ol>
+
+      <h2 id="test">Test before you push</h2>
+      <p>The estimator has no ROS in it, so its tests run anywhere:</p>
+<pre><code>cd ~/osu-uwrt/release/src/riptide_perception/riptide_mapping
+python3 -m pytest -q test/test_map_estimator.py</code></pre>
+      <p>If you change <code>map_estimator.py</code>, this site's copy of it (<code>src/engine/estimator.js</code>) is checked against the Python by <code>npm test</code>, using scenarios recorded by <code>tools/golden.py</code>; rerun both, and the site's figures stay honest.</p>
+
+      <h2 id="retrain">Retrain the detector</h2>
+      <p>Chapter 2 walks through it: record the props, label masks, add Nereus's synthetic images, augment, train, export. To try a new model in the sim, drop the <code>.pt</code> into <code>tensor_detector/weights/</code>, point <code>ffc_model</code> or <code>dfc_model</code> at it with its class map, rebuild, and run the same scenario. The detector exports a TensorRT engine on first start. Then compare: the same tree, the same course, and how many detections each prop gets and from how far.</p>
+    </div>
+    <nav class="next" aria-label="Chapter navigation"></nav>
+  </article>
+</main>
+<script type="module" src="/src/pages/workflow.js"></script>
+</body>
+</html>

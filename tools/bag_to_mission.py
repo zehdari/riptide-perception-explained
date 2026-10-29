@@ -120,6 +120,17 @@ for _, m in msgs['/talos/detected_objects']:
             p = r.pose.pose.position
             rng = math.sqrt(p.x ** 2 + p.y ** 2 + p.z ** 2)
             row = {'t': round(st(m.header) - t0, 3), 'c': cls, 's': round(r.hypothesis.score, 2), 'r': round(rng, 3), 'cam': 'dfc' if 'dfc' in m.header.frame_id else 'ffc'}
+            # every detection in map, with its surface normal (the detection's +z axis) as a map direction
+            ps = PoseStamped(); ps.header = m.header; ps.pose = r.pose.pose
+            try:
+                trm = buf.lookup_transform('map', m.header.frame_id, Time.from_msg(m.header.stamp))
+                pm = do_transform_pose_stamped(ps, trm).pose
+                row['pm'] = R([pm.position.x, pm.position.y, pm.position.z])
+                q = pm.orientation
+                n = [2 * (q.x * q.z + q.w * q.y), 2 * (q.y * q.z - q.w * q.x), 1 - 2 * (q.x * q.x + q.y * q.y)]
+                row['n'] = R(n, 2)
+            except Exception:
+                pass
             par = parent.get(cls)
             if par:
                 ps = PoseStamped(); ps.header = m.header; ps.pose = r.pose.pose
@@ -146,7 +157,7 @@ if args.log:
     for line in open(args.log):
         mm = re.search(r'\[(INFO|WARN|ERROR)\] \[(\d+\.\d+)\] \[talos\.riptide_mapping2\]: (.*)', line)
         if mm: lines.append([float(mm.group(2)), mm.group(1), mm.group(3).strip()])
-        mm = re.search(r'\[(INFO|WARN|ERROR)\] \[(\d+\.\d+)\] \[talos\.autonomy\]: (Setting mapping.*|Performing.*|[A-Z ]{3,} TIME.*)', line)
+        mm = re.search(r'\[(INFO|WARN|ERROR)\] \[(\d+\.\d+)\] \[talos\.autonomy\]: (Setting mapping.*|Performing.*|[A-Z ]{3,} TIME.*|Searching for .*|.* found|Lost sight.*|spiraling.*|.* in view.*|Chasing.*|.* centered.*|Refining.*|Message from .*|object .* covariance at .*)', line)
         if mm: lines.append([float(mm.group(2)), 'TREE', mm.group(3).strip()])
     out['log_wall'] = lines
 json.dump(out, open(args.out, 'w'), separators=(',', ':'))

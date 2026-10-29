@@ -1,0 +1,13 @@
+/* Shared by the Vision chapters: the plain-language summary under each lede (same look as the Mapping chapters'). */
+@import './detector.css';
+aside.short { max-width: var(--measure); margin: 0 auto 2rem; background: var(--paper-2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 0.9rem 1.1rem 0.6rem; font-family: var(--sans); font-size: 0.95rem; line-height: 1.5; color: var(--ink); }
+aside.short .label { display: block; font-size: 0.78rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.5rem; font-stretch: 100%; }
+aside.short ul { margin: 0; padding-left: 1.1em; }
+aside.short li { margin-bottom: 0.4em; }
+.term { font-weight: 650; }
+.steps { counter-reset: st; list-style: none; padding-left: 0; }
+.steps > li { counter-increment: st; position: relative; padding-left: 2.1rem; margin-bottom: 0.8em; }
+.steps > li::before { content: counter(st); position: absolute; left: 0; top: 0.05em; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--ink); color: var(--paper); font-family: var(--sans); font-size: 0.8rem; font-weight: 650; display: grid; place-items: center; }
+canvas.fig-canvas { display: block; width: 100%; height: auto; border-radius: 6px; background: var(--paper); touch-action: pan-y; }
+.controls .disabled-note { color: var(--accent); font-size: 0.8rem; }
+input[type='range']:disabled { opacity: 0.35; }

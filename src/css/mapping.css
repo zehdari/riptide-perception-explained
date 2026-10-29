@@ -1,0 +1,7 @@
+/* Shared by the Mapping chapters: the plain-language summary under each lede. */
+aside.short { max-width: var(--measure); margin: 0 auto 2rem; background: var(--paper-2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 0.9rem 1.1rem 0.6rem; font-family: var(--sans); font-size: 0.95rem; line-height: 1.5; color: var(--ink); }
+aside.short .label { display: block; font-size: 0.78rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.5rem; font-stretch: 100%; }
+aside.short ul { margin: 0; padding-left: 1.1em; }
+aside.short li { margin-bottom: 0.4em; }
+.term { font-weight: 650; }
+.prose p code, .prose li code, aside.short code { overflow-wrap: anywhere; }

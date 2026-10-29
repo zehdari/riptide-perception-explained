@@ -3,19 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cameras and the detector · How Talos sees</title>
+<title>The detector, frame by frame · How Talos sees</title>
 <meta name="description" content="Talos's two ZED stereo cameras, pairing colour with depth, the YOLO26n segmentation models, TensorRT, camera switching, and what tensor_detector publishes for every frame.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23d9480f'/></svg>">
 </head>
 <body>
 <main>
   <header class="page-head">
-    <div class="kicker">Chapter 1</div>
-    <h1>Cameras and the detector</h1>
+    <div class="kicker">Vision · Chapter 3</div>
+    <h1>The detector, frame by frame</h1>
     <p class="lede">Everything Talos knows about the course starts as a colour image and a depth image from one of two stereo cameras. One node, <code>yolo_orientation</code>, turns each pair into a list of named objects with 3D poses.</p>
   </header>
+  <aside class="short"><span class="label">The short version</span><ul>
+    <li>About ten times a second, the node takes the newest colour image from the active camera and finds the depth image taken at the same moment.</li>
+    <li>It runs the YOLO model from Chapter 2 on the colour image: a class, a confidence, a box and a mask for every object.</li>
+    <li>Each object's mask and the depth image become a 3D position and a surface direction (Chapters 4 and 5), and one message with every detection goes to mapping.</li>
+    <li>The detector is sometimes simply wrong: in the gate frame below it calls a gate leg a slalom pole. It doesn't try to catch that; mapping does, by only listening for the objects autonomy asks for.</li>
+    <li>Only one camera is processed at a time; autonomy switches between forward and downward with a service.</li>
+  </ul></aside>
   <article>
     <div class="prose">
+      <p>This chapter follows one camera frame through the detector, from the moment the ZED publishes it to the moment a list of detections goes out to mapping. The next two chapters zoom in on the one step in the middle that does geometry: turning a mask into a pose.</p>
       <p>The node lives in the <a href="https://github.com/osu-uwrt/riptide_perception/tree/mapping-estimator/tensor_detector"><code>tensor_detector</code></a> package. It is split the way this chapter and the next two are: <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/yolo_orientation.py"><code>yolo_orientation.py</code></a> is the ROS side (parameters, subscriptions, the camera switch, publishing), <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/yolo_model.py"><code>yolo_model.py</code></a> wraps the neural network, and <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/detection.py"><code>detection.py</code></a> turns the network's output into poses. This chapter covers the first two. Every frame on these pages was rendered by the <a href="https://github.com/osu-uwrt/nereus">Nereus</a> simulator during a full autonomous mission and re-run offline through the same code.</p>
 
       <h2 id="cameras">Two stereo cameras</h2>
@@ -25,18 +33,18 @@
         <li><code>depth/depth_registered</code>: a 32-bit float depth image in metres, registered to the left image, so pixel (u, v) of the depth image is the depth of pixel (u, v) of the colour image;</li>
         <li><code>rgb/camera_info</code>: the intrinsics of the rectified image.</li>
       </ul>
-      <p>Depth here is the <em>z</em> coordinate in the camera's optical frame, <code>talos/ffc_left_camera_optical_frame</code> (x right, y down, z out of the lens), not the distance along the ray. Nereus's forward camera reports a focal length of <span class="m">f_x = f_y = 1864</span> px with the principal point near the image centre, which makes the field of view 54.5° across and 35.7° tall. Underwater the effective focal length is longer than in air, because the flat port bends each ray toward the axis; that is why the package README's first suggestion for orientations that come out slightly off is to check the camera is using the right calibration file.</p>
+      <p>Depth here is the <em>z</em> coordinate in the camera's optical frame, <code>talos/ffc_left_camera_optical_frame</code> (x right, y down, z out of the lens), not the distance along the ray. Nereus's forward camera reports a focal length of <span class="m">f_x = f_y = 1864</span> px with the principal point near the image centre, which makes the field of view 54.5° across and 35.7° tall. On the robot these numbers come from the team's underwater calibration (Chapter 1): the forward camera's is <span class="m">f_x = 1701.5</span> px, a 59° view.</p>
       <p>Only one camera is processed at a time. The node subscribes to the active camera's three topics and nothing else; autonomy switches cameras when a task needs the other one (below).</p>
 
       <h2 id="sync">Pairing colour with depth</h2>
       <p>The colour image and the depth image of one capture are published separately, and they do not arrive together. Depth is the heavy one (9.2 MB per frame uncompressed, against a few hundred kB of JPEG) and it reaches the node well after the colour frame it belongs to. Using "the newest depth image" for each colour frame would therefore pair it with depth from an earlier capture, and while Talos turns, every pixel of that older depth image belongs to a slightly different view.</p>
       <p>The node keeps a ring buffer of recent depth frames instead (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/yolo_orientation.py#L331-L361"><code>depth_callback</code>, <code>_match_depth</code></a>): at most <code>depth_buffer_size</code> = 15 frames, and none older than <code>max_depth_age</code> = 1 s behind the newest. Each colour frame takes the buffered depth frame whose header stamp is nearest its own, and is skipped if that is more than 1 s away or the camera info has not arrived yet. The colour and depth callbacks sit in separate mutually exclusive callback groups on a multi-threaded executor, so a slow inference never holds up the depth subscription and the buffer stays current.</p>
-      <p>The stamp that goes out with the detections is the colour image's (<code>use_incoming_timestamp</code>), the moment the picture was taken, not the moment processing finished. Mapping looks up where the camera was at exactly that stamp (Chapter 5), so latency in the detector costs time but not accuracy.</p>
+      <p>The stamp that goes out with the detections is the colour image's (<code>use_incoming_timestamp</code>), the moment the picture was taken, not the moment processing finished. Mapping looks up where the camera was at exactly that stamp (Chapter 7), so latency in the detector costs time but not accuracy.</p>
     </div>
 
     <div class="prose">
       <h2 id="model">The network</h2>
-      <p>The detector is a YOLO instance-segmentation network: for each object it finds it returns a class, a confidence, a bounding box and a mask, an outline of the object's pixels. Talos runs two of them, one per camera, both Ultralytics <strong>YOLO26n-seg</strong>: the "nano" size, a 640×640 input (the 1920×1200 frame is letterboxed down to it), stride 32. Each was trained on an augmented dataset of its camera's view of the 2026 RoboSub props. The forward model knows eleven classes, the downward model eight:</p>
+      <p>The detector is a YOLO instance-segmentation network: for each object it finds it returns a class, a confidence, a bounding box and a mask, an outline of the object's pixels. Talos runs two of them, one per camera, both Ultralytics <strong>YOLO26n-seg</strong>: the "nano" size, a 640×640 input (the 1920×1200 frame is letterboxed down to it), stride 32. Each was trained on an augmented dataset of its camera's view of the 2026 RoboSub props (Chapter 2). The forward model knows eleven classes, the downward model eight:</p>
     </div>
     <figure class="fig">
       <div class="panel"><div class="cols" id="class-tables"></div></div>
@@ -51,8 +59,13 @@
         <div id="det-view"></div>
         <div class="frame-note" id="det-note"></div>
       </div>
-      <figcaption><b>What the network returns</b>, on frames from the forward and downward cameras during a Nereus mission: each mask filled in its class colour, the box around it, and the confidence. The torpedo board's four openings come back as the generic class <code>circle</code>; telling them apart is geometry's job (Chapter 3). On the gate frame only the slalom pole clears the 0.65 threshold here; during the mission the TensorRT engine also found <code>sos</code> (0.73) and, in the next frame, <code>compass</code> (0.72), just above it. The offline re-run uses the PyTorch weights, whose confidences differ by a few hundredths. Tap a frame to switch.</figcaption>
+      <figcaption><b>What the network returns</b>, on frames from the forward and downward cameras during a Nereus mission: each mask filled in its class colour, the box around it, and the confidence. The torpedo board's four openings come back as the generic class <code>circle</code>; telling them apart is geometry's job (Chapter 5). On the gate frame the only detection is a mistake: there is no slalom pole in the picture, and the "slalom" box is the gate's right leg (below). During the mission the TensorRT engine also found <code>sos</code> (0.73) and, in the next frame, <code>compass</code> (0.72), just above the threshold; the offline re-run uses the PyTorch weights, whose confidences differ by a few hundredths. Tap a frame to switch.</figcaption>
     </figure>
+    <div class="prose">
+      <h3 id="false">The detector is sometimes wrong</h3>
+      <p>Look at the gate frame. The network is 85 % sure the gate's right leg is a slalom pole: a tall, thin, dark pole standing in the water is most of what it learned a slalom pole looks like. Nothing in the detector can tell. It reports what it sees in every frame, with no idea what Talos is doing or where it is on the course, and false detections like this are a fact of life even for a well-trained model (Chapter 2 is about making them rarer).</p>
+      <p>So the system is built not to need a perfect detector. Mapping only fuses the objects autonomy has told it to look for, its <strong>targets</strong> (Chapter 9), and its filters reject detections that don't agree with what it already knows (Chapter 7). While Talos swims through the gate the behaviour tree goes further and <strong>locks</strong> the map (<code>lock_map</code>): mapping ignores every detection until the next target is set. The slalom pole the detector "sees" on the gate never reaches the map.</p>
+    </div>
 
     <div class="prose">
       <h2 id="tensorrt">TensorRT, with a way out</h2>
@@ -67,7 +80,7 @@
       <h2 id="switching">Switching cameras</h2>
       <p>Autonomy picks the camera with the <code>set_camera_is_dfc</code> service (a <code>SetBool</code>: true for the downward camera). The switch has to replace a lot of state at once: the model, its class map and thresholds, the topic prefix, the frame id the detections are stamped with, and whether the torpedo logic runs. A frame processed halfway through, say with the downward model but the forward camera's class map, would publish confidently wrong names.</p>
       <p>So the service only records the request and sets a 0.1 s timer; the timer callback (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/src/yolo_orientation.py#L220-L258"><code>setup_camera</code></a>) loads the new model first, then swaps every field together under <code>_camera_lock</code>, clears the depth buffer, and replaces the subscriptions. Each subscription callback is bound to the camera it was created for (<code>functools.partial(..., camera=camera)</code>), and drops any message whose camera is no longer the active one: messages already in flight from the old camera can't leak into the new configuration. Destroying a subscription while an executor thread is taking a message from it raises <code>InvalidHandle</code> inside rclpy; the node's spin loop recognises that one case and drops the message instead of crashing.</p>
-      <p>Two more services tune the processing without a switch: <code>set_slalom_type</code> renames the published slalom detection, and <code>set_table_pair_enabled</code> turns the warning + helmet pair into one table detection (Chapter 3).</p>
+      <p>Two more services tune the processing without a switch: <code>set_slalom_type</code> renames the published slalom detection, and <code>set_table_pair_enabled</code> can turn the warning + helmet pair into one table detection. The current competition tree turns that pair off and fits the table to the two baskets in mapping instead (Chapter 5).</p>
     </div>
 
     <div class="prose">
@@ -80,10 +93,10 @@
       <figcaption><b>The routing in <code>process()</code>.</b> Most classes take the generic path and become one detection each. The torpedo symbols, the pair members and the slalom poles are collected first and resolved once the whole frame has been seen, because their pose depends on other boxes. Tap a path for what it does.</figcaption>
     </figure>
     <div class="prose">
-      <p>The generic path, a plane fitted to the object's surface, is Chapter 2. The three collected paths are Chapter 3.</p>
+      <p>The generic path, a plane fitted to the object's surface, is Chapter 4. The three collected paths are Chapter 5.</p>
 
       <h2 id="outputs">What gets published</h2>
-      <p>One message per frame goes to mapping: <code>/talos/detected_objects</code>, a <code>vision_msgs/Detection3DArray</code> stamped with the image's stamp and the camera's optical frame. Each <code>Detection3D</code> in it carries one hypothesis: the class name as a string (<code>"pill"</code>, <code>"torpedo"</code>, <code>"fire_hole_large"</code>), the confidence, and a pose: the object's centre in the camera frame and an orientation whose +z axis is the object's surface normal, pointing back at the camera. The pose's covariance is left at zero. The detector says where it saw something, and mapping decides how much to believe it, from where the object was in the image and how Talos was moving (Chapter 4).</p>
+      <p>One message per frame goes to mapping: <code>/talos/detected_objects</code>, a <code>vision_msgs/Detection3DArray</code> stamped with the image's stamp and the camera's optical frame. Each <code>Detection3D</code> in it carries one hypothesis: the class name as a string (<code>"pill"</code>, <code>"torpedo"</code>, <code>"fire_hole_large"</code>), the confidence, and a pose: the object's centre in the camera frame and an orientation whose +z axis is the object's surface normal, pointing back at the camera. The pose's covariance is left at zero. The detector says where it saw something, and mapping decides how much to believe it, from where the object was in the image and how Talos was moving (Chapter 6).</p>
       <p>Three more outputs exist for people, and cost nothing unless someone subscribes: the annotated image (<code>~/annotated/compressed</code>, the network's own drawing of boxes and masks), a point cloud of every 3D sample the pose fits used (<code>~/point_cloud</code>, coloured by class) and RViz markers, an arrow along each normal (<code>~/visualization_marker_array</code>, cleared and redrawn each frame). The node checks the subscriber count of each before building it.</p>
     </div>
     <nav class="next" aria-label="Chapter navigation"></nav>

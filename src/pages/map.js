@@ -4,6 +4,7 @@ import { Graph } from '../viz/graph.js';
 import { MapEstimator, detection_covariance, _rotate } from '../engine/estimator.js';
 import { cholesky } from '../engine/linalg.js';
 import '../css/map.css';
+import '../css/mapping.css';
 
 setup();
 const BASE = import.meta.env.BASE_URL;
@@ -664,7 +665,7 @@ async function main() {
 }
 main();
 
-// ---------- the offset through the Nereus run (Chapter 8's data) ----------
+// ---------- the offset through the Nereus run (Chapter 10's data) ----------
 {
   const host = document.getElementById('nereus-offset-chart');
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -678,6 +679,6 @@ main();
       { name: 'true north', color: css('--reference'), dash: true, width: 1.2, noLegend: true, values: [{ x: 0, y: s.shift[1] }, { x: s.duration, y: s.shift[1] }] },
     ]);
     const t = s.props.torpedo, last = s.offset.at(-1);
-    document.getElementById('nereus-offset-text').textContent = `The offset ends at (${last[1].toFixed(2)}, ${last[2].toFixed(2)}) m. The torpedo, whose prior was ${Math.round(t.prior_err * 100)} cm off, ends ${Math.round(t.final_err * 100)} cm from where Nereus put it. The first step is the slalom, and lands on the true shift. The second is the torpedo: rather than release it, the solve explains part of its 1.27 m as odometry drift since the slalom, so the offset overshoots and the props still unseen move away from the truth again. Chapter 8 goes through why.`;
+    document.getElementById('nereus-offset-text').textContent = `The offset ends at (${last[1].toFixed(2)}, ${last[2].toFixed(2)}) m. The torpedo, whose prior was ${Math.round(t.prior_err * 100)} cm off, ends ${Math.round(t.final_err * 100)} cm from where Nereus put it. The first step is the slalom, and lands on the true shift. The second is the torpedo: rather than release it, the solve explains part of its 1.27 m as odometry drift since the slalom, so the offset overshoots and the props still unseen move away from the truth again. Chapter 10 goes through why.`;
   });
 }

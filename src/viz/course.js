@@ -12,7 +12,10 @@ export const PROPS = {
   table: { task: 'table', size: [0.9, 1.2], label: 'table' },
 };
 const COLORS = { gate: '#2a78d6', slalom_parent: '#1baf7a', torpedo: '#eb6834', bin: '#6250d6', table: '#e87ba4' };
-export const colorOf = (name) => COLORS[name] || '#3f5b67';
+// Everything else takes its family's colour: what it belongs to on the course
+const FAMILY = [[/gate|compass|hammer|buoy|sos/, '#2a78d6'], [/slalom/, '#1baf7a'], [/torpedo|hole|circle|ambulance|fire_engine/, '#eb6834'],
+  [/bin|fire|blood|magnet/, '#6250d6'], [/table|pill|plug|nut|bandage|helmet|warning/, '#e87ba4']];
+export const colorOf = (name) => COLORS[name] || FAMILY.find(([re]) => re.test(name))?.[1] || '#3f5b67';
 
 // The last row of a time-sorted table at or before t (binary search on column 0).
 export function at(rows, t) {
@@ -38,7 +41,7 @@ export class CourseView {
     this.c = canvas;
     this.ctx = canvas.getContext('2d');
     this.d = data;
-    this.o = { trail: 90, detFade: 4, pad: 1.2, fov: 54.5, fovRange: 6, showPriors: true, showDets: true, focus: null, ...opts };
+    this.o = { trail: 90, detFade: 4, pad: 1.2, fov: 54.5, fovRange: 6, showPriors: true, showDets: true, showNormals: true, focus: null, ...opts };
     this.t = 0;
     // Truth placements keyed by task name
     this.truth = Object.fromEntries((data.course || []).map((p) => [p.task, p]));
@@ -93,6 +96,7 @@ export class CourseView {
     this.course();
     if (this.o.showPriors) this.priors();
     this.estimates();
+    this.children();
     if (this.o.showDets) this.detections();
     this.robot();
   }
@@ -205,19 +209,45 @@ export class CourseView {
     const { ctx } = this;
     const dets = this.d.detections || [];
     const t = this.t, fade = this.o.detFade;
-    // detections are time sorted: walk back from t
+    // rows are [t, class, x, y, normal x, normal y], time sorted: walk back from t
     let lo = 0, hi = dets.length;
-    while (lo < hi) { const m = (lo + hi) >> 1; if (dets[m].t <= t) lo = m + 1; else hi = m; }
-    for (let i = lo - 1; i >= 0 && dets[i].t > t - fade; i--) {
-      const d = dets[i];
-      if (!d.p || d.f !== 'map') continue;
-      const a = 1 - (t - d.t) / fade;
-      const [cx, cy] = this.px(d.p[0], d.p[1]);
-      ctx.globalAlpha = 0.25 + 0.6 * a;
-      ctx.fillStyle = colorOf(d.c);
+    while (lo < hi) { const m = (lo + hi) >> 1; if (dets[m][0] <= t) lo = m + 1; else hi = m; }
+    for (let i = lo - 1; i >= 0 && dets[i][0] > t - fade; i--) {
+      const [dt, c, x, y, nx, ny] = dets[i];
+      const a = 1 - (t - dt) / fade;
+      const [cx, cy] = this.px(x, y);
+      ctx.globalAlpha = 0.25 + 0.65 * a;
+      ctx.fillStyle = ctx.strokeStyle = colorOf(c);
       ctx.beginPath(); ctx.arc(cx, cy, 2.2, 0, TAU); ctx.fill();
+      // the surface normal it measured, top-down (a board facing the camera points back at it)
+      if (this.o.showNormals && Math.hypot(nx, ny) > 0.3) {
+        const L = 0.45;
+        const [ex, ey] = this.px(x + L * nx, y + L * ny);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // Objects in another prop's frame (holes, table items, bin targets, gate halves, poles), placed through their parents
+  children() {
+    const { ctx } = this;
+    const t = Math.floor(this.t);
+    for (const [name, rows] of Object.entries(this.d.children || {})) {
+      const r = rows[Math.min(Math.max(t, 0), rows.length - 1)];
+      if (!r) continue;
+      const [cx, cy] = this.px(r[1], r[2]);
+      const col = colorOf(name);
+      ctx.beginPath(); ctx.arc(cx, cy, 2.6, 0, TAU);
+      ctx.lineWidth = 1.2; ctx.strokeStyle = col; ctx.fillStyle = r[3] ? col : 'rgba(243,247,247,0.9)';
+      ctx.fill(); ctx.stroke();
+      if (this.o.focus && this.o.focus.includes(name)) {
+        ctx.font = '600 11px Archivo Variable, system-ui, sans-serif'; ctx.textAlign = 'left';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(243,247,247,0.9)'; ctx.strokeText(name, cx + 6, cy + 4);
+        ctx.fillStyle = '#0f2633'; ctx.fillText(name, cx + 6, cy + 4);
+      }
+    }
   }
 
   robot() {

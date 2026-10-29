@@ -2,7 +2,7 @@
 
 An interactive explainer for [`riptide_perception`](https://github.com/osu-uwrt/riptide_perception/tree/mapping-estimator), the detector and mapping that tell the Ohio State Underwater Robotics Team's AUV Talos where the RoboSub props are. Live at **https://zehdari.github.io/riptide-perception-explained/**. Companion to [How Talos flies](https://zehdari.github.io/riptide-mpc-explained/).
 
-Chapters: the cameras and YOLO detector, turning a segmentation mask into a 3D pose, composite props (torpedo board, gate halves, table, slalom), the detection noise model, the per-object Kalman filter and acquisition by agreement, the robust course-map solve (offset, deviations, course yaw), frames/targets/autonomy (and the bins' binary classifier), and a full mission in the Nereus simulator.
+Written for new team members. **Vision:** camera calibration (pinhole, distortion, stereo, ChArUco), training the YOLO models, the detector at runtime, turning a mask into a 3D pose, composite props. **Mapping:** the detection noise model, the per-object Kalman filter and acquisition by agreement, the robust course-map solve, frames/targets and what `RepairCompMpcTree` asks of mapping, and a full mission in Nereus. **Your turn:** running, recording, tuning and retraining.
 
 ## How it works
 
@@ -11,7 +11,8 @@ Chapters: the cameras and YOLO detector, turning a segmentation mask into a 3D p
 Real data comes from [Nereus](https://github.com/osu-uwrt/nereus) running Talos's whole stack (`ros2 launch nereus sim.launch.py active_control_model:=mpc mpc_model:=sim`) and `RepairCompMpcTree`:
 
 - `tools/frame_pipeline.py` runs `tensor_detector`'s own `DetectionProcessor` offline on grabbed RGB + depth frames, recording every stage → `public/data/frames/`.
-- `tools/bag_to_mission.py` turns a mission bag into JSON; `tools/hero_data.py` and `tools/mission_data.py` cut it down for the overview replay and Chapter 8; `tools/noise_measure.py` measures detection scatter from position holds.
+- `tools/bag_to_mission.py` turns a mission bag into JSON; `tools/hero_data.py`, `tools/event_cards.py` and `tools/mission_data.py` cut it down for the overview replay and Chapter 10; `tools/noise_measure.py` measures detection scatter from position holds.
+- `tools/nereus/` has the helpers used to drive the sim: `run_tree.py`, `tour.py` (place Talos, hold, grab frames), `grab_frames.py`, `annot_video.py`, and the moved-course scenario.
 
 ```sh
 npm ci

@@ -1,5 +1,6 @@
 import { setup } from '../layout.js';
 import '../css/noise.css';
+import '../css/mapping.css';
 import { LineChart } from '../viz/chart.js';
 import { detection_covariance, NoiseSettings, EstimatorSettings, MapEstimator } from '../engine/estimator.js';
 import { eye, eigh } from '../engine/linalg.js';
@@ -181,7 +182,7 @@ function ellipse2(c) {
       { name: 'old torpedo-hole check (0.0005 m²)', color: css('--s8'), dash: true, width: 1.2, values: [{ x: 0, y: thr }, { x: T, y: thr }] },
     ]);
     const at2 = (v) => v.reduce((best, p) => (Math.abs(p.x - 2) < Math.abs(best.x - 2) ? p : best), v[0]).y;
-    note.textContent = `After 2 s at ${rate} Hz: ${at2(on).toFixed(2)} cm with inflation, ${at2(off).toFixed(2)} cm without. The first ${EstimatorSettings.acquire_detections} detections wait for agreement (Chapter 5) before any of them count.`;
+    note.textContent = `After 2 s at ${rate} Hz: ${at2(on).toFixed(2)} cm with inflation, ${at2(off).toFixed(2)} cm without. The first ${EstimatorSettings.acquire_detections} detections wait for agreement (Chapter 7) before any of them count.`;
   }
   slider(controls, 'Frame rate', 1, 30, 1, 15, (v) => `${v} Hz`, update);
   update(15);

@@ -1,10 +1,12 @@
 /* Overview page: the mission-replay hero and the chapter list. */
 .course-hero .copy { max-width: 26rem; }
-.course-hero .copy p { font-size: 1.08rem; }
-.cam-inset { position: absolute; left: clamp(1.2rem, 4vw, 3.5rem); bottom: 6.6rem; width: min(26vw, 340px); margin: 0; background: #0f2633; border-radius: 8px; overflow: hidden; box-shadow: 0 6px 24px rgba(15, 38, 51, 0.25); }
+.course-hero .copy p { font-size: 1.02rem; max-width: 24rem; }
+@media (max-height: 860px) and (min-width: 721px) { .course-hero .copy p { display: none; } }
+.cam-inset { position: absolute; left: clamp(1.2rem, 4vw, 3.5rem); bottom: 6.4rem; width: min(24vw, 290px); margin: 0; background: #0f2633; border-radius: 8px; overflow: hidden; box-shadow: 0 6px 24px rgba(15, 38, 51, 0.25); }
 .cam-inset[hidden] { display: none; }
-.cam-inset video { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
-.cam-inset figcaption { margin: 0; padding: 0.3rem 0.6rem; font-size: 0.74rem; color: #c9dbe0; max-width: none; }
+.cam-inset img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.cam-inset figcaption { margin: 0; padding: 0.35rem 0.6rem 0.45rem; font-size: 0.74rem; line-height: 1.3; color: #e3eef1; max-width: none; min-height: 2.9em; }
+.cam-inset #cam-when { color: #8fb3bd; font-variant-numeric: tabular-nums; margin-right: 0.3rem; }
 
 .replay { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 0.9rem; background: rgba(243, 247, 247, 0.92); backdrop-filter: blur(6px); border-radius: 10px; padding: 0.6rem 0.8rem; flex: 1 1 26rem; max-width: 44rem; }
 .replay .btn.primary { min-width: 5.2rem; }
@@ -31,3 +33,4 @@
   .course-hero .hud { max-width: none; }
   .replay { flex-basis: 100%; }
 }
+.part-label { font-family: var(--sans); font-size: 0.78rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 1.4rem 0 0.4rem; }

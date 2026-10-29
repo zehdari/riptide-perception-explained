@@ -10,13 +10,20 @@
 <body>
 <main>
   <header class="page-head">
-    <div class="kicker">Chapter 4</div>
+    <div class="kicker">Mapping · Chapter 6</div>
     <h1>How far to trust a detection</h1>
     <p class="lede">The detector says where an object is. It doesn't say how sure it is. Mapping fills that in with a noise model: a covariance for every detection that depends on how far away the object was, which way the camera was looking, and how fast Talos was moving when the frame was taken.</p>
   </header>
   <article>
+    <aside class="short"><span class="label">The short version</span><ul>
+      <li>Every detection comes with a <span class="term">covariance</span>: a 3×3 matrix that says how far off it might be, and in which directions. Picture it as an ellipsoid around the detection.</li>
+      <li>Stereo cameras measure depth worse than direction, so the ellipsoid is a cigar pointing along the camera's line of sight, and it grows fast with range (depth error grows with distance squared).</li>
+      <li>If Talos is turning or moving when the picture is taken, a small timestamp error smears the detection sideways, so the ellipsoid gets fatter.</li>
+      <li>Detections a fraction of a second apart share most of their error, so mapping counts a burst of them as less than the same number spread out.</li>
+      <li>The numbers in the model are guesses from old thresholds; Nereus shows detections scattering about ten times less, and the real fix is to measure on the robot.</li>
+    </ul></aside>
     <div class="prose">
-      <p>A <code>Detection3D</code> from <code>tensor_detector</code> carries a class, a confidence score and a pose in the camera's optical frame. Its covariance fields are left at zero. To fuse detections with a Kalman filter (Chapter 5), mapping needs to know how much each one should move the estimate, and that is what a measurement covariance <span class="m">\Rm</span> encodes. A detection 80 cm away is worth far more than one 5 m away, and a frame grabbed mid-turn is worth less than one taken while holding still.</p>
+      <p>A <code>Detection3D</code> from <code>tensor_detector</code> carries a class, a confidence score and a pose in the camera's optical frame. Its covariance fields are left at zero. To fuse detections with a Kalman filter (Chapter 7), mapping needs to know how much each one should move the estimate, and that is what a measurement covariance <span class="m">\Rm</span> encodes. A detection 80 cm away is worth far more than one 5 m away, and a frame grabbed mid-turn is worth less than one taken while holding still.</p>
       <p>The model is one function, <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L130"><code>detection_covariance</code></a> in <code>map_estimator.py</code>, called from <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/mapping.py#L753"><code>update_object_with_pose</code></a> for every detection mapping fuses. Its parameters live under <code>noise:</code> in <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/config/config.yaml#L46"><code>config/config.yaml</code></a>. Every figure on this page calls the browser's copy of that function.</p>
 
       <h2 id="model">The noise model</h2>
@@ -27,7 +34,7 @@
       <h3 id="stereo">Why depth error grows with the square of range</h3>
       <p>A stereo camera doesn't measure depth directly. It measures <strong>disparity</strong>: how many pixels a point shifts between the left and right images. With focal length <span class="m">f</span> in pixels and baseline <span class="m">B</span> between the two lenses, depth is <span class="m">z = fB/d</span>. Differentiate it and a fixed matching error <span class="m">\delta d</span> becomes</p>
       <div class="M">\delta z = \frac{z^2}{f B}\,\delta d</div>
-      <p>so depth error grows with the square of range. The ZED X Mini has a 50 mm baseline, and in Nereus the cameras render at 1920×1200 with <span class="m">f</span> = 1864 px, so <span class="m">fB</span> ≈ 93 px·m. One pixel of disparity error at 2 m is 4.3 cm of depth. The model's <span class="m">k_2</span> = 0.003 m per m² corresponds to matching to about a quarter of a pixel. The detector then averages up to 500 sampled points over the object's mask before it reports a depth (Chapter 2), which shrinks independent pixel noise. It doesn't shrink errors the points share, though, such as a depth map that is a little off everywhere on a surface.</p>
+      <p>so depth error grows with the square of range. The ZED X Mini has a 50 mm baseline, and in Nereus the cameras render at 1920×1200 with <span class="m">f</span> = 1864 px, so <span class="m">fB</span> ≈ 93 px·m. One pixel of disparity error at 2 m is 4.3 cm of depth. The model's <span class="m">k_2</span> = 0.003 m per m² corresponds to matching to about a quarter of a pixel. The detector then averages up to 500 sampled points over the object's mask before it reports a depth (Chapter 4), which shrinks independent pixel noise. It doesn't shrink errors the points share, though, such as a depth map that is a little off everywhere on a surface.</p>
 
       <h3 id="timing">Motion turns timing error into position error</h3>
       <p>A detection is stamped with its image's capture time, and mapping looks up the camera's pose at that stamp in TF to put the detection in the world. If the stamp and the pose disagree by <span class="m">\delta t</span>, the detection lands where the camera would have put it <span class="m">\delta t</span> earlier or later. While Talos turns at <span class="m">\omega</span>, that swings it sideways by <span class="m">\omega\,\delta t\, r</span>. While it moves at <span class="m">v</span>, everything shifts by <span class="m">v\,\delta t</span>. The model adds both with <span class="m">t_s</span> = 0.03 s, the assumed stamp error:</p>
@@ -48,7 +55,7 @@
       <figcaption><b>One detection's covariance, from above.</b> The camera sits at the bottom, looking up the page, and the shaded wedge is the forward camera's field of view in Nereus. Drag the orange point (or tap anywhere) to move the detection. The inner ellipse is 1σ and the outer is 2σ, both drawn larger than life, by the factor shown, so they're visible at this scale. Turn up the yaw rate and the ellipse fattens across the ray; speed inflates it in every direction.</figcaption>
     </figure>
     <div class="prose">
-      <p>The same numbers as curves. At rest the along-ray error passes the across-ray error at once and keeps pulling away: by 4 m depth is four times worse than bearing. That shape is why a detection taken off to the side pins an object's position along a direction the one from straight ahead couldn't, and why the filter in Chapter 5 weighs each detection's ellipse rather than a single number.</p>
+      <p>The same numbers as curves. At rest the along-ray error passes the across-ray error at once and keeps pulling away: by 4 m depth is four times worse than bearing. That shape is why a detection taken off to the side pins an object's position along a direction the one from straight ahead couldn't, and why the filter in Chapter 7 weighs each detection's ellipse rather than a single number.</p>
     </div>
     <figure class="fig narrow">
       <div class="panel" id="range-chart"></div>
@@ -70,7 +77,7 @@
 
     <div class="prose">
       <h2 id="inflation">Back-to-back detections aren't independent</h2>
-      <p>A Kalman filter assumes every measurement's error is fresh. Camera frames aren't like that. Two frames 100 ms apart see the same water, the same lighting, almost the same viewpoint, and very nearly the same depth-map error, so their errors are mostly shared. Treat ten frames per second as ten independent measurements and the filter becomes overconfident within a second. Its covariance shrinks far below the real error, the gate in Chapter 5 starts rejecting good detections, and covariance checks in autonomy pass on what is really one view.</p>
+      <p>A Kalman filter assumes every measurement's error is fresh. Camera frames aren't like that. Two frames 100 ms apart see the same water, the same lighting, almost the same viewpoint, and very nearly the same depth-map error, so their errors are mostly shared. Treat ten frames per second as ten independent measurements and the filter becomes overconfident within a second. Its covariance shrinks far below the real error, the gate in Chapter 7 starts rejecting good detections, and covariance checks in autonomy pass on what is really one view.</p>
       <p>Mapping handles this per object (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L308"><code>inflation</code></a>): a detection that arrives <span class="m">\Delta t</span> after the last accepted one of the same object has its covariance scaled up by</p>
       <div class="M">\Rm \leftarrow \Rm \cdot \min\!\Big(\max\!\big(1,\ \tfrac{\tau}{\Delta t}\big),\ 30\Big), \qquad \tau = 0.3\ \text{s}</div>
       <p>Detections more than 0.3 s apart count fully. Closer ones count for <span class="m">\Delta t/\tau</span> of a detection each. The cap of 30 covers several detections of one object in the same frame (<span class="m">\Delta t</span> is floored at 1 ms, so they'd otherwise get 300).</p>
@@ -93,7 +100,7 @@
         <li><strong>Bias.</strong> A covariance describes scatter, not offset. If the mask's edge consistently bleeds onto the background or the depth map reads 2 % long, every detection is wrong in the same direction, and averaging won't remove it. The covariance keeps shrinking regardless.</li>
         <li><strong>Correlation between objects.</strong> Two objects seen in the same frame share that frame's camera-pose error. Each object's filter treats its own detections as unrelated to the other's.</li>
         <li><strong>Viewing angle.</strong> A board seen edge-on gives a worse plane fit and a worse centroid than one seen face-on. The model only knows range and motion.</li>
-        <li><strong>Wrong-class detections</strong> aren't noise at all. A slalom pole labeled as part of the gate is a different object, and no covariance makes it right. Chapter 5's gate and agreement rules and the target lists (Chapter 7) handle those.</li>
+        <li><strong>Wrong-class detections</strong> aren't noise at all. A slalom pole labeled as part of the gate is a different object, and no covariance makes it right. Chapter 7's gate and agreement rules and the target lists (Chapter 9) handle those.</li>
       </ul>
       <p>None of these is fatal. The gate, the acquisition rules and the course map are all designed to cope with a covariance that is roughly right rather than exact. They do mean a tight covariance should be read as "seen consistently", which isn't always the same as "seen correctly".</p>
     </div>

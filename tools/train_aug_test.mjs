@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: process.env.HOME + '/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome' });
+const p = await b.newPage({ viewport: { width: 1100, height: 900 } });
+const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+await p.goto('http://localhost:5204/riptide-perception-explained/training.html', { waitUntil: 'load' });
+await p.waitForTimeout(1500);
+const c = await p.$('#aug-canvas'); await c.scrollIntoViewIfNeeded();
+await p.$eval('#aug-controls input', (i) => { i.value = 20; i.dispatchEvent(new Event('input')); });
+await p.waitForTimeout(400); await c.screenshot({ path: '/tmp/perc/a1.png' });
+await p.click('#aug-controls .seg button:nth-child(2)'); await p.waitForTimeout(800); await c.screenshot({ path: '/tmp/perc/a2.png' });
+await p.click('#aug-controls .seg button:nth-child(3)'); await p.waitForTimeout(800); await c.screenshot({ path: '/tmp/perc/a3.png' });
+await p.click('#aug-pick button:nth-child(2)'); await p.waitForTimeout(800);
+console.log(await p.$eval('#aug-controls label', (l) => l.textContent), await p.$eval('#aug-controls input', (i) => i.disabled));
+await p.click('#aug-controls .seg button:nth-child(1)'); await p.waitForTimeout(800); await c.screenshot({ path: '/tmp/perc/a4.png' });
+console.log(errs.join('\n') || 'ok', await p.$eval('#aug-note', (n) => n.textContent)); await b.close();
