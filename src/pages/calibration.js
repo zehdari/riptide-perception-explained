@@ -51,19 +51,19 @@ function seg(host, options, value, onPick) {
       s('line', { x1: O[0] - fs, y1: O[1] - sgn * HALF, x2: O[0] + 6.2 * M, y2: O[1] + slope * 6.2 * M, stroke: css('--rule'), 'stroke-width': 1.5 }, svg);
     }
     s('line', { x1: 40, y1: O[1], x2: 880, y2: O[1], stroke: css('--rule'), 'stroke-dasharray': '3 4' }, svg);
-    s('text', { x: 860, y: O[1] - 8, 'text-anchor': 'end' }, svg).textContent = 'z (lens axis)';
+    // labels keep ~9.5 css px on a phone (the drawing is 900 units wide)
+    const fz = Math.max(13, (9.5 * 900) / (svg.clientWidth || 900));
+    const label = (attrs, text) => { const e = s('text', { class: 'halo', ...attrs }, svg); e.style.fontSize = `${fz}px`; e.textContent = text; return e; };
+    const [px, py] = toSvg(P);
+    const t = P[1] / P[0];
     // camera body and sensor
     s('rect', { x: O[0] - fs - 14, y: O[1] - HALF - 10, width: fs + 14, height: 2 * HALF + 20, rx: 6, fill: css('--paper-3'), stroke: muted }, svg);
     s('line', { x1: O[0] - fs, y1: O[1] - HALF, x2: O[0] - fs, y2: O[1] + HALF, stroke: ink, 'stroke-width': 4 }, svg);
-    s('text', { x: O[0] - fs - 18, y: O[1] + HALF + 30, 'text-anchor': 'middle' }, svg).textContent = 'sensor';
     s('circle', { cx: O[0], cy: O[1], r: 4, fill: ink }, svg);
-    s('text', { x: O[0] + 6, y: O[1] + 20 }, svg).textContent = 'optical centre';
     // f label
-    s('line', { x1: O[0] - fs, y1: O[1] + HALF + 44, x2: O[0], y2: O[1] + HALF + 44, stroke: muted }, svg);
-    s('text', { x: O[0] - fs / 2, y: O[1] + HALF + 62, 'text-anchor': 'middle' }, svg).textContent = 'f';
+    const fy = O[1] + HALF + 31 + fz;
+    s('line', { x1: O[0] - fs, y1: fy, x2: O[0], y2: fy, stroke: muted }, svg);
     // the ray
-    const [px, py] = toSvg(P);
-    const t = P[1] / P[0];
     const ys = O[1] - fs * t;
     const hit = Math.abs(t * f) <= 600;
     s('line', { x1: O[0] - fs, y1: ys, x2: px, y2: py, stroke: hit ? acc : muted, 'stroke-width': 2 }, svg);
@@ -72,6 +72,11 @@ function seg(host, options, value, onPick) {
     const g = s('g', { style: 'cursor:grab' }, svg);
     s('circle', { cx: px, cy: py, r: 16, fill: acc, opacity: 0.15 }, g);
     s('circle', { cx: px, cy: py, r: 7, fill: acc }, g);
+    // labels last, so no line runs through them; "optical centre" sits on the side of the axis the ray isn't
+    label({ x: 860, y: O[1] - 8, 'text-anchor': 'end' }, 'z (lens axis)');
+    label({ x: O[0] - fs - 18, y: O[1] + HALF + 17 + fz, 'text-anchor': 'middle' }, 'sensor');
+    label({ x: O[0] + 6, y: t > 0 ? O[1] - 8 : O[1] + 7 + fz }, 'optical centre');
+    label({ x: O[0] - fs / 2, y: fy + 5 + fz, 'text-anchor': 'middle' }, 'f');
     const v = f * t + cy;
     note.innerHTML = `Point at <b>z = ${P[0].toFixed(2)} m</b>, <b>y = ${P[1].toFixed(2)} m</b> (below the axis is +y). ` +
       (hit ? `It lands on row <b>v = ${f.toFixed(0)} × ${t.toFixed(3)} + ${cy} = ${v.toFixed(0)}</b> of 1200.` : `It falls outside the 1200-row image: this camera can't see it.`);
@@ -87,6 +92,7 @@ function seg(host, options, value, onPick) {
   svg.addEventListener('pointerup', () => (drag = false));
   svg.style.touchAction = 'none';
   draw();
+  new ResizeObserver(() => draw()).observe(svg);
 }
 
 // ---------- distortion: a rectified frame run back through the lens model ----------
@@ -225,22 +231,28 @@ function seg(host, options, value, onPick) {
     const X = 330, Y = 150, L = 260;
     s('rect', { x: X, y: 10, width: 260, height: 280, fill: css('--water'), opacity: 0.7 }, svg);
     s('line', { x1: X, y1: 10, x2: X, y2: 290, stroke: css('--ink'), 'stroke-width': 5 }, svg);
-    s('text', { x: X + 12, y: 32 }, svg).textContent = 'water, n = 1.33';
-    s('text', { x: X - 12, y: 32, 'text-anchor': 'end' }, svg).textContent = 'air, inside the housing';
-    s('text', { x: X + 8, y: 280 }, svg).textContent = 'window';
+    // labels keep ~9.5 css px on a phone (the drawing is 600 units wide)
+    const fz = Math.max(13, (9.5 * 600) / (svg.clientWidth || 600));
+    const label = (attrs, text) => { const e = s('text', { class: 'halo', ...attrs }, svg); e.style.fontSize = `${fz}px`; e.textContent = text; return e; };
     s('line', { x1: 20, y1: Y, x2: 590, y2: Y, stroke: css('--rule'), 'stroke-dasharray': '3 4' }, svg);
     const w = (th * Math.PI) / 180, a = Math.asin(Math.min(1, N * Math.sin(w)));
     const acc = css('--accent');
     s('line', { x1: X + L * Math.cos(w), y1: Y - L * Math.sin(w), x2: X, y2: Y, stroke: acc, 'stroke-width': 2.5 }, svg);
     s('line', { x1: X, y1: Y, x2: X - L * Math.cos(a), y2: Y + L * Math.sin(a), stroke: acc, 'stroke-width': 2.5 }, svg);
     s('line', { x1: X, y1: Y, x2: X - L * Math.cos(w), y2: Y + L * Math.sin(w), stroke: css('--muted'), 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }, svg);
-    s('text', { x: X + 70, y: Y - 14 }, svg).textContent = `θw = ${th.toFixed(1)}°`;
-    s('text', { x: X - 130, y: Y + 70 }, svg).textContent = `θa = ${((a * 180) / Math.PI).toFixed(1)}°`;
-    s('text', { x: X - 250, y: Y + 22 }, svg).textContent = 'dashed: unbent';
+    // the rays run up-right in the water and down-left in the air, so the angle labels sit on the other side of the axis
+    label({ x: X + 12, y: 32 }, 'water, n = 1.33');
+    label({ x: X - 12, y: 32, 'text-anchor': 'end' }, 'air, inside the housing');
+    label({ x: X + 8, y: 280 }, 'window');
+    label({ x: X + 70, y: Y + 10 + fz }, `θw = ${th.toFixed(1)}°`);
+    label({ x: X - 14, y: Y - 12, 'text-anchor': 'end' }, `θa = ${((a * 180) / Math.PI).toFixed(1)}°`);
+    label({ x: X - 310, y: Y - 12 }, 'dashed: unbent');
     const xs = Array.from({ length: 81 }, (_, i) => i * 0.5);
     chart.set([{ name: 'refracted ÷ scaled pinhole', color: acc, values: xs.map((x) => ({ x, y: ratio(x) })) }], { markers: [{ x: th, label: `${ratio(th).toFixed(3)}` }] });
   }
   draw();
+  let lastW = 0;
+  new ResizeObserver(() => { if (svg.clientWidth !== lastW) { lastW = svg.clientWidth; draw(); } }).observe(svg);
 }
 
 // ---------- depth from disparity ----------

@@ -76,9 +76,29 @@ export class LineChart {
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.innerHTML = '';
     if (!this.series.length) return;
-    const m = { l: 46, r: 14, t: this.o.title || this.o.yLabel ? 24 : 8, b: this.o.xLabel ? 34 : 22 };
+    const m = { l: 46, r: 14, t: this.o.title ? 24 : this.o.yLabel ? 28 : 8, b: this.o.xLabel ? 34 : 22 }; // room between the y label and the top tick
     const { x0, x1, y0, y1 } = this.domain();
     const sx = (x) => m.l + ((x - x0) / (x1 - x0 || 1)) * (W - m.l - m.r);
+    // Marker labels: one that would run off the right edge sits left of its line; one that would run into an
+    // earlier label drops to the next free row. Without a title the rows go above the plot, clear of the data.
+    const marks = (this.o.markers || []).map((mk) => {
+      const probe = el('text', { class: 'label marker-label' }, svg);
+      probe.textContent = mk.label;
+      const len = probe.getComputedTextLength?.() || mk.label.length * 6.5;
+      probe.remove();
+      const flip = sx(mk.x) + 4 + len > W - 2;
+      const l = flip ? sx(mk.x) - 4 - len : sx(mk.x) + 4;
+      return { mk, flip, l, r: l + len };
+    });
+    const rows = [];
+    for (const k of marks) {
+      k.row = rows.findIndex((spans) => spans.every(([a, b]) => k.r + 6 < a || k.l > b + 6));
+      if (k.row < 0) k.row = rows.push([]) - 1;
+      rows[k.row].push([k.l, k.r]);
+    }
+    const above = rows.length && !this.o.title;
+    const rowY = (row) => (above ? (this.o.yLabel ? 26 : 12) + row * 13 : m.t + 10 + row * 13);
+    if (above) m.t = rowY(rows.length - 1) + 8;
     const sy = (y) => H - m.b - ((y - y0) / (y1 - y0 || 1)) * (H - m.t - m.b);
     this.map = { sx, sy, m, W, H, x0, x1 };
     if (this.o.title) el('text', { class: 'title', x: m.l, y: 13 }, svg).textContent = this.o.title;
@@ -124,17 +144,12 @@ export class LineChart {
         t.textContent = s.endLabel;
       }
     }
-    if (this.o.markers) {
-      // Labels that would run into the previous one drop to the next free row.
-      const rowEnds = [];
-      for (const mk of this.o.markers) el('line', { x1: sx(mk.x), x2: sx(mk.x), y1: m.t, y2: H - m.b, stroke: 'var(--muted)', 'stroke-dasharray': '2 3' }, svg);
-      for (const mk of this.o.markers) { // labels after all the lines, so no line crosses a label
-        const x = sx(mk.x) + 4;
-        let row = rowEnds.findIndex((end) => x > end + 6);
-        if (row < 0) row = rowEnds.length;
-        const t = el('text', { class: 'label marker-label', x, y: m.t + 10 + row * 13 }, svg);
+    if (marks.length) {
+      for (const { mk, row } of marks) el('line', { x1: sx(mk.x), x2: sx(mk.x), y1: above ? rowY(row) + 3 : m.t, y2: H - m.b, stroke: 'var(--muted)', 'stroke-dasharray': '2 3' }, svg);
+      for (const { mk, row, flip } of marks) { // labels after all the lines, so no line crosses a label
+        const t = el('text', { class: 'label marker-label', x: sx(mk.x) + (flip ? -4 : 4), y: rowY(row) }, svg);
+        if (flip) t.setAttribute('text-anchor', 'end');
         t.textContent = mk.label;
-        rowEnds[row] = x + (t.getComputedTextLength?.() || mk.label.length * 6.5);
       }
     }
     this.cross = el('line', { class: 'crosshair', y1: m.t, y2: H - m.b, visibility: 'hidden' }, svg);

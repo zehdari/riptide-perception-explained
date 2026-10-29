@@ -77,6 +77,8 @@ export class Cloud3D {
       g.fill();
       g.stroke();
     }
+    const labels = []; // drawn last, past the tip of their arrow and clear of each other
+    let refSeg = null; // the dashed all-steps normal, unlabelled
     // camera direction: a short line from the patch toward the origin
     {
       const L = Math.hypot(...c);
@@ -87,9 +89,7 @@ export class Cloud3D {
       g.lineWidth = 1;
       g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
       g.setLineDash([]);
-      g.fillStyle = css('--muted');
-      g.font = '12px Archivo Variable, sans-serif';
-      g.fillText('to camera', b[0] + 4, b[1] - 4);
+      labels.push({ text: 'to camera', a, b, font: '12px Archivo Variable, sans-serif', color: css('--muted') });
     }
     // points, far to near
     const col = { kept: css('--state'), gate: css('--accent'), outlier: css('--s4'), bleed: css('--s7') };
@@ -113,10 +113,8 @@ export class Cloud3D {
       g.lineTo(b[0] - 9 * Math.cos(ang - 0.4), b[1] - 9 * Math.sin(ang - 0.4));
       g.lineTo(b[0] - 9 * Math.cos(ang + 0.4), b[1] - 9 * Math.sin(ang + 0.4));
       g.fill();
-      if (!dash) {
-        g.font = '600 12px Archivo Variable, system-ui, sans-serif';
-        g.fillText('normal', b[0] + 6, b[1] - 6);
-      }
+      if (!dash) labels.unshift({ text: 'normal', a, b, font: '600 12px Archivo Variable, system-ui, sans-serif', color });
+      else refSeg = { a, b };
     };
     if (d.fit && d.ref) arrow(d.ref, css('--muted'), true);
     if (d.fit) {
@@ -124,6 +122,33 @@ export class Cloud3D {
       const a = scr(d.fit.centroid);
       g.fillStyle = css('--ink');
       g.beginPath(); g.arc(a[0], a[1], 4.5, 0, 7); g.fill();
+    }
+    // With both labels beside their tips, each goes on the far side from the other arrow.
+    const yOn = (q, x) => { const t = (x - q.a[0]) / ((q.b[0] - q.a[0]) || 1e-9); return q.a[1] + Math.min(Math.max(t, 0), 1) * (q.b[1] - q.a[1]); };
+    const below = (tip) => {
+      const me = labels.find((q) => q.b === tip);
+      const other = me.text === 'normal' ? refSeg || labels.find((q) => q !== me) : labels.find((q) => q !== me);
+      return !!other && tip[1] > yOn(other, tip[0]);
+    };
+    const boxes = [];
+    for (const { text, a, b, font, color } of labels) {
+      g.font = font;
+      const w = g.measureText(text).width, h = 12;
+      const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+      let x, y;
+      if (Math.abs(dx) < len * 0.5) { x = b[0] - w / 2; y = b[1] + (dy > 0 ? h + 8 : -8); } // steep: beyond the tip
+      else {
+        // flat: beside the tip, running back along the arrow; above it, or below if the other arrow's tip is higher
+        x = dx < 0 ? b[0] : b[0] - w;
+        y = below(b) ? b[1] + h + 6 : b[1] - 8;
+      }
+      x = Math.min(Math.max(x, 4), r.width - w - 4);
+      for (let k = 0; k < 6 && boxes.some((q) => x < q[2] && q[0] < x + w && y - h < q[3] && q[1] < y); k++) y += dy > 0 ? h + 2 : -(h + 2);
+      y = Math.min(Math.max(y, h + 2), r.height - 4);
+      boxes.push([x, y - h, x + w, y]);
+      g.lineWidth = 3; g.lineJoin = 'round'; g.strokeStyle = css('--paper');
+      g.strokeText(text, x, y);
+      g.fillStyle = color; g.fillText(text, x, y);
     }
   }
 }

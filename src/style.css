@@ -188,6 +188,7 @@ table.params tr.group td { font-weight: 600; color: var(--ink); padding-top: 1re
 
 /* ---------- graphs (nodes & edges) ---------- */
 svg.graph { display: block; width: 100%; height: auto; font-family: var(--sans); overflow: visible; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+svg.graph.narrow { max-width: 27rem; margin: 0 auto; } /* the phone layout, not blown up on a small tablet */
 svg.graph .node { cursor: pointer; touch-action: manipulation; outline: none; } /* selection shows as the highlight, keyboard focus included */
 svg.graph .node rect, svg.graph .node circle { fill: var(--paper); stroke: var(--ink); stroke-width: 1.5; }
 svg.graph .node text { fill: var(--ink); font-size: 12.5px; text-anchor: middle; dominant-baseline: central; }
@@ -233,7 +234,8 @@ svg.graph .pulse { fill: var(--accent); }
   .shell { grid-template-columns: 1fr; }
   .rail { position: fixed; z-index: 50; inset: 0 auto 0 0; width: min(20rem, 86vw); background: var(--paper); transform: translateX(-102%); transition: transform 0.22s ease; box-shadow: 0 0 0 100vmax rgba(15, 38, 51, 0); }
   .rail.open { transform: none; box-shadow: 0 0 0 100vmax rgba(15, 38, 51, 0.35); }
-  .menu-btn { display: inline-flex; position: fixed; z-index: 40; top: 0.8rem; left: 0.8rem; }
+  .menu-btn { display: inline-flex; position: fixed; z-index: 40; top: 0.8rem; left: 0.8rem; transition: transform 0.2s ease, opacity 0.2s ease; }
+  .menu-btn.tucked { transform: translateY(-4rem); opacity: 0; pointer-events: none; }
   .page-head { padding-top: 4.2rem; }
   body { font-size: 1.08rem; }
   .hero .copy p { font-size: 1.02rem; }
@@ -246,6 +248,12 @@ svg.graph .pulse { fill: var(--accent); }
   table.params th, table.params td { padding-right: 0.5rem; }
   table.params td:first-child { white-space: normal; }
   table.params code { overflow-wrap: break-word; font-size: 0.74rem; }
+}
+/* Phones: a segmented control wraps onto a second row (as in the Vision chapters) instead of squeezing its labels
+   onto three lines. */
+@media (max-width: 640px) {
+  .seg { flex-wrap: wrap; border-radius: 14px; background: var(--paper); }
+  .seg button { white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

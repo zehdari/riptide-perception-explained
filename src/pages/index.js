@@ -60,8 +60,18 @@ const BASE = import.meta.env.BASE_URL;
     width: 900,
     height: 340,
     nodes: nodes.map((n) => ({ id: n.id, label: n.label, sub: n.sub, x: 90 + n.x * 180, y: 50 + n.y * 125, w: 150 })),
-    edges: edges.map(([from, to, label]) => ({ from, to, label, dash: label === 'target', bend: label === 'target' ? -40 : 0 })),
+    edges: edges.map(([from, to, label]) => ({ from, to, label, dash: label === 'target', bend: label === 'target' ? 40 : 0 })),
     onSelect: say,
+    // Phones: two columns, snaking down; vision in the top half, mapping in the bottom half.
+    narrow: {
+      width: 340,
+      height: 445,
+      nodes: Object.fromEntries(Object.entries({
+        cam: [0, 0], sync: [1, 0], yolo: [1, 1], fit: [0, 1], comp: [0, 2],
+        det: [0, 3], tf: [1, 3], track: [1, 4], solve: [0, 4], pub: [0, 5], auto: [1, 5],
+      }).map(([id, [c, r]]) => [id, { x: c ? 258 : 82, y: 30 + r * 74 + (r > 2 ? 15 : 0), w: 0 }])),
+      edges: { 'auto>track': { bend: 0, lx: 264, ly: 382, anchor: 'start' } },
+    },
   });
   host.appendChild(note);
   say(null);

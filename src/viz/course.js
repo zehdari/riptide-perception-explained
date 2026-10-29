@@ -110,8 +110,8 @@ export class CourseView {
     for (let x = Math.ceil(x0); x <= x1; x++) { const a = this.px(x, y0), b = this.px(x, y1); ctx.moveTo(...a); ctx.lineTo(...b); }
     for (let y = Math.ceil(y0); y <= y1; y++) { const a = this.px(x0, y), b = this.px(x1, y); ctx.moveTo(...a); ctx.lineTo(...b); }
     ctx.stroke();
-    // A 1 m scale bar, bottom right
-    const [bx, by] = [this.c.clientWidth - 16 - this.s, this.c.clientHeight - 14 - (this.o.insets?.[2] || 0)];
+    // A 2 m scale bar, bottom right
+    const [bx, by] = [this.c.clientWidth - 16 - 2 * this.s, this.c.clientHeight - 14 - (this.o.insets?.[2] || 0)];
     ctx.fillStyle = 'rgba(15,38,51,0.55)';
     ctx.fillRect(bx, by, this.s * 2, 2);
     ctx.font = '600 11px Archivo Variable, system-ui, sans-serif';

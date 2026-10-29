@@ -50,12 +50,14 @@ export class FrameView {
     this.img.src = `${BASE}data/frames/${frame.name}.webp`;
     this.img.alt = `Nereus ${frame.cam} camera frame: ${frame.boxes.map((b) => b.class).join(', ') || 'no detections'}`;
     this.svg.replaceChildren();
+    this.placed = []; // tag boxes drawn so far, so later tags can keep clear of them
     this.layer = s('g', {}, this.svg);
     return this.layer;
   }
   // YOLO's output: masks (filled), boxes (outlined) and "class 0.95" tags.
   drawDetections({ masks = true, boxes = true, labels = true, dim = false, only } = {}) {
     const g = s('g', { class: 'dets' }, this.svg);
+    const tags = [];
     for (const b of this.frame.boxes) {
       if (only && !only(b)) continue;
       const col = classColor(b.class);
@@ -64,16 +66,40 @@ export class FrameView {
       }
       const [x0, y0, x1, y1] = b.box;
       if (boxes) s('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: 'none', stroke: col, 'stroke-width': 2, 'stroke-dasharray': dim ? '6 6' : 'none', 'vector-effect': 'non-scaling-stroke' }, g);
-      if (labels) this.tag(g, x0, y0, `${b.class} ${b.score.toFixed(2)}`, col);
+      if (labels) tags.push([b, col]);
+    }
+    // Tags go on top of every mask and box, and one that would cover an earlier tag moves inside its box's top
+    // edge, or under the box, instead.
+    const hits = (r) => this.hits(r);
+    for (const [b, col] of tags) {
+      const [x0, y0, , y1] = b.box;
+      const text = `${b.class} ${b.score.toFixed(2)}`;
+      const { w, h } = this.tagSize(text);
+      const x = Math.max(0, Math.min(x0, this.frame.size[0] - w));
+      const options = [[Math.max(0, y0 - h), false], [y0, true], [y1, true]];
+      const [ty, below] = options.find(([t]) => !hits([x, t, x + w, t + h])) || options[0];
+      this.tag(g, x, below ? ty - 4 : ty + h, text, col, below);
     }
     return g;
   }
+  // Tags are 30 image px tall, or larger on a small screen so their text stays at least ~8 css px.
+  tagSize(text) {
+    const scale = (this.wrap.clientWidth || 640) / (this.frame?.size?.[0] || 1920);
+    const fs = Math.round(Math.max(30, 8.5 / Math.max(scale, 1e-3)));
+    return { fs, w: text.length * fs * 0.56 + 16, h: fs + 10 };
+  }
+  hits(r) {
+    return (this.placed || []).some((q) => r[0] < q[2] && q[0] < r[2] && r[1] < q[3] && q[1] < r[3]);
+  }
   tag(g, x, y, text, col, below = false) {
-    const fs = 30, w = text.length * fs * 0.56 + 16;
-    const ty = below ? y + 4 : Math.max(0, y - fs - 10);
+    const { fs, w, h } = this.tagSize(text);
+    let ty = below ? y + 4 : Math.max(0, y - h);
+    // a tag that would cover an earlier one steps down below it
+    for (let k = 0; k < 4 && this.hits([x, ty, x + w, ty + h]); k++) ty += h + 2;
+    this.placed?.push([x, ty, x + w, ty + h]);
     const t = s('g', { class: 'tag' }, g);
-    s('rect', { x, y: ty, width: w, height: fs + 10, rx: 6, fill: 'rgba(15,38,51,0.82)' }, t);
-    s('rect', { x, y: ty, width: 8, height: fs + 10, rx: 3, fill: col }, t);
+    s('rect', { x, y: ty, width: w, height: h, rx: 6, fill: 'rgba(15,38,51,0.82)' }, t);
+    s('rect', { x, y: ty, width: 8, height: h, rx: 3, fill: col }, t);
     const tx = s('text', { x: x + 14, y: ty + fs - 2, fill: '#f3f7f7', 'font-size': fs, 'font-family': 'Archivo Variable, sans-serif' }, t);
     tx.textContent = text;
     return t;

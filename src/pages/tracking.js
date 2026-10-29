@@ -229,8 +229,6 @@ const makeEstimator = () => new MapEstimator({ [NAME]: { parent: 'map', position
     const [px, py] = T.px(PRIOR);
     ctx.strokeStyle = css('--ink-2'); ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(px, py - 6); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 6); ctx.lineTo(px - 6, py); ctx.closePath(); ctx.stroke();
-    ctx.font = '12px ' + css('--sans'); ctx.fillStyle = css('--ink-2');
-    ctx.fillText('prior', px - 34, py - 7);
     dets(ctx, T, false);
     if (S.look) square(ctx, T.px(lookalike()), 4, css('--muted'));
     square(ctx, T.px(S.truth), 4.5, css('--ink'));
@@ -238,6 +236,10 @@ const makeEstimator = () => new MapEstimator({ [NAME]: { parent: 'map', position
     const zs = ZOOM_W / 2, zh = zs * geo.zoom.h / geo.zoom.w;
     const [ax, ay] = T.px([S.truth[0] - zs, S.truth[1] + zh]);
     ctx.strokeStyle = css('--ink-2'); ctx.setLineDash([2, 3]); ctx.strokeRect(ax, ay, 2 * zs * T.s, 2 * zh * T.s); ctx.setLineDash([]);
+    // the prior's label after the zoom box, with a halo, so the box's edge never runs through it
+    ctx.font = '12px ' + css('--sans');
+    ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = css('--paper'); ctx.strokeText('prior', px - 34, py - 7);
+    ctx.fillStyle = css('--ink-2'); ctx.fillText('prior', px - 34, py - 7);
     // Talos
     ctx.save(); ctx.translate(tx, ty); ctx.rotate(-th);
     ctx.fillStyle = css('--accent'); ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, -7); ctx.lineTo(-4, 0); ctx.lineTo(-7, 7); ctx.closePath(); ctx.fill();
@@ -343,7 +345,7 @@ const makeEstimator = () => new MapEstimator({ [NAME]: { parent: 'map', position
   };
   for (let i = 0; i < 16; i++) {
     const reason = one();
-    if (reason.includes('detections agree')) markers.push({ x: n, label: '4 agree' });
+    if (/^\d+ detections agree/.test(reason)) markers.push({ x: n, label: '4 agree' }); // not the 'acquiring: 3/4 …' ones
     if (!confirmedSeen && est.confirmed(NAME)) { markers.push({ x: n, label: 'confirmed' }); confirmedSeen = true; }
   }
   est.reset(NAME, true);

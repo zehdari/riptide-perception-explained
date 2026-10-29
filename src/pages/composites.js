@@ -118,12 +118,18 @@ async function boardLayout(name) {
     // axis + ticks
     const ext = 0.12, a0 = px(sub(fire.p3, mul(sep, ext))), a1 = px(add(blood.p3, mul(sep, ext)));
     s('line', { x1: a0[0], y1: a0[1], x2: a1[0], y2: a1[1], stroke: '#0f2633', 'stroke-width': 4, 'stroke-dasharray': '18 12', opacity: 0.6 }, svg);
+    // Labels narrow with the board as it turns (as if painted on it), so neighbours' labels don't run together.
+    const squeeze = (t, [x, y]) => {
+      const k = Math.max(0.5, Math.cos((st.yaw * Math.PI) / 180));
+      if (k < 0.999) t.setAttribute('transform', `translate(${x} 0) scale(${k} 1) translate(${-x} 0)`);
+    };
     // symbols
     for (const it of P.filter((i) => i.cls !== 'circle')) {
       const q = px(it.p3);
       s('polygon', { points: disc(it, it.r * 0.85), fill: classColor(it.cls, 0.55), stroke: classColor(it.cls), 'stroke-width': 6 }, svg);
       const t = s('text', { x: q[0], y: q[1] + 12, 'text-anchor': 'middle', 'font-size': 38 }, svg);
       t.textContent = it.cls.replace('_', ' ');
+      squeeze(t, q);
       t.style.fontSize = '38px';
       t.style.fill = '#0f2633';
       t.style.fontWeight = 600;
@@ -141,6 +147,7 @@ async function boardLayout(name) {
       s('circle', { cx: foot[0], cy: foot[1], r: 9, fill: col }, svg);
       const t = s('text', { x: q[0], y: q[1] + 14, 'text-anchor': 'middle', 'font-size': 40 }, svg);
       t.textContent = `${HOLE_LABEL[c.got]} ${ok ? '✓' : '✗'}`;
+      squeeze(t, q);
       t.style.fontSize = '40px';
       t.style.fill = '#f3f7f7';
       t.style.fontWeight = 700;

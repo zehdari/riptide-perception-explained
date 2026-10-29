@@ -9,31 +9,59 @@ function textWidth(text, weight, size) {
 }
 
 export class Graph {
-  constructor(container, { width = 900, height = 360, nodes = [], edges = [], onSelect, arrows = true, info } = {}) {
+  // `narrow`: an optional second layout for small screens, used while the container is narrower than `narrow.below`
+  // css px: { below, width, height, nodes: { id: { x, y, ... } }, edges: { 'from>to': { bend, via, lx, ly, anchor } } }.
+  constructor(container, { width = 900, height = 360, nodes = [], edges = [], onSelect, arrows = true, info, narrow } = {}) {
+    this.cfg = { width, height, nodes, edges, narrow };
+    this.container = container;
+    this.arrows = arrows;
+    this.onSelect = onSelect;
+    this.info = info;
+    this.build(this.isNarrow());
+    if (narrow) {
+      new ResizeObserver(() => {
+        const n = this.isNarrow();
+        if (n === this.narrowOn) return;
+        this.build(n);
+        this.highlight(this.selected ?? null);
+        if (this.pulseArgs) this.pulse(...this.pulseArgs);
+      }).observe(container);
+    }
+    document.addEventListener('pointerdown', (e) => { if (this.selected && !this.svg.contains(e.target)) this.highlight(null); });
+  }
+  isNarrow() {
+    const n = this.cfg.narrow;
+    if (!n) return false;
+    const cs = getComputedStyle(this.container);
+    const w = this.container.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    return (w > 0 ? w : innerWidth) < (n.below || 600);
+  }
+  build(narrow) {
+    this.narrowOn = narrow;
+    const c = this.cfg, alt = narrow ? c.narrow : null;
+    const width = alt ? alt.width : c.width, height = alt ? alt.height : c.height;
     this.W = width; this.H = height;
-    this.svg = el('svg', { class: 'graph', viewBox: `0 0 ${width} ${height}`, role: 'img' }, container);
+    const old = this.svg;
+    this.svg = el('svg', { class: alt ? 'graph narrow' : 'graph', viewBox: `0 0 ${width} ${height}`, role: 'img' });
+    if (old) old.replaceWith(this.svg); else this.container.appendChild(this.svg);
     const defs = el('defs', {}, this.svg);
     for (const [id, color] of [['arrow', 'var(--ink-2)'], ['arrow-hot', 'var(--accent)']]) {
       const mk = el('marker', { id: id + this.uid(), viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
       el('path', { d: 'M0,1 L9,5 L0,9 z', fill: color }, mk);
     }
-    this.arrows = arrows;
-    this.onSelect = onSelect;
-    this.info = info;
     this.gEdges = el('g', {}, this.svg);
     this.gPulses = el('g', {}, this.svg);
     this.gNodes = el('g', {}, this.svg);
     this.gLabels = el('g', {}, this.svg); // edge labels sit above nodes and edges
     this.nodes = new Map();
     this.edges = [];
-    nodes.forEach((n) => this.addNode(n));
-    edges.forEach((e) => this.addEdge(e));
+    c.nodes.forEach((n) => this.addNode(alt?.nodes?.[n.id] ? { ...n, ...alt.nodes[n.id] } : n));
+    c.edges.forEach((e) => { const o = alt?.edges?.[`${e.from}>${e.to}`]; this.addEdge(o ? { ...e, ...o } : e); });
     // A touch "leaves" as soon as the finger lifts: only a mouse clears the highlight by leaving,
     // so a tapped node stays selected until another is tapped.
     this.svg.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') this.highlight(null); });
     // Touch: tapping empty space in the graph, or anywhere outside it, deselects.
     this.svg.addEventListener('pointerdown', (e) => { if (!e.target.closest('.node')) this.highlight(null); });
-    document.addEventListener('pointerdown', (e) => { if (this.selected && !this.svg.contains(e.target)) this.highlight(null); });
   }
   uid() {
     if (!this._uid) this._uid = '-' + Math.random().toString(36).slice(2, 8);
@@ -81,9 +109,11 @@ export class Graph {
     const bend = e.bend || 0;
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     const nx = -(b.y - a.y), ny = b.x - a.x, nl = Math.hypot(nx, ny) || 1;
-    const c = { x: mx + (nx / nl) * bend, y: my + (ny / nl) * bend };
-    const p0 = this.anchor(a, bend ? c : b), p1 = this.anchor(b, bend ? c : a);
-    const d = bend ? `M${p0.x},${p0.y} Q${c.x},${c.y} ${p1.x},${p1.y}` : `M${p0.x},${p0.y} L${p1.x},${p1.y}`;
+    // `via`: an explicit control point [x, y] instead of a bend off the midpoint
+    const curved = !!(bend || e.via);
+    const c = e.via ? { x: e.via[0], y: e.via[1] } : { x: mx + (nx / nl) * bend, y: my + (ny / nl) * bend };
+    const p0 = this.anchor(a, curved ? c : b), p1 = this.anchor(b, curved ? c : a);
+    const d = curved ? `M${p0.x},${p0.y} Q${c.x},${c.y} ${p1.x},${p1.y}` : `M${p0.x},${p0.y} L${p1.x},${p1.y}`;
     const path = el('path', { class: 'edge', d }, this.gEdges);
     if (this.arrows && e.arrow !== false) path.setAttribute('marker-end', `url(#arrow${this.uid()})`);
     if (e.dash) path.setAttribute('stroke-dasharray', '4 4');
@@ -93,8 +123,10 @@ export class Graph {
     let label = null;
     if (e.label) {
       // On a curved edge, sit on the curve's midpoint (p0 + 2c + p1) / 4, not on its control point.
-      const lx = bend ? (p0.x + 2 * c.x + p1.x) / 4 : mx, ly = bend ? (p0.y + 2 * c.y + p1.y) / 4 : my;
-      label = el('text', { class: 'elabel', x: lx, y: ly - 5 }, this.gLabels);
+      // lx, ly, anchor place it explicitly (beside a short edge, say).
+      const lx = e.lx ?? (curved ? (p0.x + 2 * c.x + p1.x) / 4 : mx), ly = e.ly ?? (curved ? (p0.y + 2 * c.y + p1.y) / 4 : my) - 5;
+      label = el('text', { class: 'elabel', x: lx, y: ly }, this.gLabels);
+      if (e.anchor) label.style.textAnchor = e.anchor;
       label.textContent = e.label;
     }
     const edge = { ...e, path, label };
@@ -122,11 +154,14 @@ export class Graph {
   // Dots that travel along edges, `period` seconds per lap; respects reduced motion.
   pulse(edgeFilter = () => true, period = 1.6) {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    this.pulseArgs = [edgeFilter, period];
+    const svg = this.svg; // a rebuild for the other layout starts a fresh loop; this one stops
     const dots = this.edges.filter(edgeFilter).map((e) => ({ e, dot: el('circle', { class: 'pulse', r: 3.2 }, this.gPulses), len: e.path.getTotalLength() }));
     const t0 = performance.now();
     let visible = true;
-    new IntersectionObserver(([en]) => (visible = en.isIntersecting)).observe(this.svg);
+    new IntersectionObserver(([en]) => (visible = en.isIntersecting)).observe(svg);
     const loop = (now) => {
+      if (svg !== this.svg) return;
       if (visible) {
         const u = (((now - t0) / 1000) % period) / period;
         dots.forEach(({ e, dot, len }) => {

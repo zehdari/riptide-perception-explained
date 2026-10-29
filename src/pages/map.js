@@ -212,7 +212,8 @@ function courseFigure(layout) {
   const sx = (x) => (x - X0) * k, sy = (y) => H - (y - Y0) * k;
   const wx = (px) => px / k + X0, wy = (py) => (H - py) / k + Y0;
   function resize() {
-    const w = canvas.parentElement.clientWidth - 2;
+    const par = canvas.parentElement, cs = getComputedStyle(par);
+    const w = Math.floor(par.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)); // the panel's content box
     W = w; k = W / (X1 - X0); H = Math.round((Y1 - Y0) * k);
     const dpr = devicePixelRatio || 1;
     canvas.width = W * dpr; canvas.height = H * dpr;
@@ -257,6 +258,14 @@ function courseFigure(layout) {
     ctx.restore();
   }
 
+  // canvas text with a halo of the water colour, so the lines it sits on don't run through it
+  function haloText(text, x, y, color) {
+    ctx.save();
+    ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(207,231,236,0.9)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+    ctx.restore();
+  }
   function draw() {
     const ink = css('--ink'), ink2 = css('--ink-2'), muted = css('--muted'), accent = css('--accent');
     ctx.clearRect(0, 0, W, H);
@@ -271,7 +280,8 @@ function courseFigure(layout) {
     ctx.beginPath(); ctx.moveTo(sx(0), 0); ctx.lineTo(sx(0), H); ctx.moveTo(sx(22.86), 0); ctx.lineTo(sx(22.86), H); ctx.stroke();
     ctx.fillStyle = ink; ctx.fillRect(sx(0) - 3, sy(0.6), 6, 1.2 * k);
     ctx.font = '11px Archivo Variable, system-ui, sans-serif'; ctx.fillStyle = ink2;
-    ctx.fillText('AprilTag board', sx(0) + 6, sy(-0.9));
+    // above the board: the offset arrows leave its centre and usually point down and right, past "offset ×4"
+    haloText('AprilTag board', sx(0) + 6, sy(0.6) - 6, ink2);
     // scale bar
     ctx.fillStyle = ink2; ctx.fillRect(sx(19), sy(-4), 2 * k, 2); ctx.fillText('2 m', sx(19), sy(-4) - 5);
 
@@ -302,7 +312,7 @@ function courseFigure(layout) {
       const lw = ctx.measureText(lab).width;
       let lx = sx(Math.max(prior[p.name][0], T[0], m[0])) + 12;
       if (lx + lw > W - 4) lx = sx(Math.min(prior[p.name][0], T[0], m[0])) - 12 - lw;
-      ctx.fillText(lab, lx, sy(prior[p.name][1]) - 10);
+      haloText(lab, lx, sy(prior[p.name][1]) - 10, ink);
     }
     // waypoints ride along on the offset, unseen
     for (const n of WAYPOINTS) {
@@ -329,8 +339,8 @@ function courseFigure(layout) {
     const [o] = est.offset(), to = truthOffset(), M = 4;
     arrow(sx(0), sy(0), sx(M * to[0]), sy(M * to[1]), ink, [4, 3]);
     arrow(sx(0), sy(0), sx(M * o[0]), sy(M * o[1]), accent);
-    ctx.fillStyle = ink2; ctx.font = '11px Archivo Variable, system-ui, sans-serif';
-    ctx.fillText('offset ×4', sx(M * o[0]) + 6, sy(M * o[1]) + 14);
+    ctx.font = '11px Archivo Variable, system-ui, sans-serif';
+    haloText('offset ×4', sx(M * o[0]) + 6, sy(M * o[1]) + 14, ink2);
 
     // Talos and its camera's view
     const leg = sim.leg;
@@ -533,7 +543,9 @@ function factorGraph() {
     E('f1', 'o1'), E('f2', 'o2'), E('f3', 'o3'), E('f1', 'dg'), E('f3', 'dg'), E('f2', 'ds'),
     E('pr', 'o1'), E('q12', 'o1'), E('q12', 'o2'), E('q23', 'o2'), E('q23', 'o3'), E('lg', 'dg'), E('ls', 'ds'),
   ];
-  new Graph(host, { width: 620, height: 330, nodes, edges, arrows: false, info: (n) => { note.textContent = n ? n.info : 'Circles are unknowns; small squares are cost terms. Tap one.'; } });
+  // Phones: the same graph squeezed sideways (the nodes are small), so its labels stay readable.
+  const narrow = { width: 360, height: 330, nodes: Object.fromEntries(nodes.map((n) => [n.id, { x: 20 + (n.x - 60) * 0.64 }])) };
+  new Graph(host, { width: 620, height: 330, nodes, edges, narrow, arrows: false, info: (n) => { note.textContent = n ? n.info : 'Circles are unknowns; small squares are cost terms. Tap one.'; } });
   host.appendChild(note);
   note.textContent = 'Circles are unknowns; small squares are cost terms. Tap one.';
 }
@@ -608,7 +620,8 @@ function blameFigure(layout) {
 
   function drawBars(rows) {
     bars.innerHTML = '';
-    const Wd = 420, rowH = 40, labelW = 132, x0 = labelW, x1 = Wd - 56, lo = -1.2, hi = 2.4;
+    // drawn at size on a phone, so the text stays readable
+    const Wd = Math.min(420, Math.max(320, bars.clientWidth || 420)), rowH = 40, labelW = 132, x0 = labelW, x1 = Wd - 56, lo = -1.2, hi = 2.4;
     const svg = el('svg', { class: 'chart', viewBox: `0 0 ${Wd} ${rows.length * rowH + 22}` }, bars);
     const sxv = (v) => x0 + ((v - lo) / (hi - lo)) * (x1 - x0);
     for (const v of [-1, 0, 1, 2]) {

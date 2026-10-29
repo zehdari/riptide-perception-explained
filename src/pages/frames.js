@@ -41,7 +41,23 @@ function tfTree() {
     ...['gate', 'slalom', 'torpedo', 'bin', 'table', 'pre'].map((n) => E('offset', n, true)),
     E('gate', 'gatec', true), E('slalom', 'slalomc', true), E('torpedo', 'torpc', true), E('bin', 'binc', true), E('table', 'tablec', true),
   ];
-  new Graph(host, { width: 740, height: 390, nodes, edges, info: (n) => { note.textContent = n ? n.info : hint; } });
+  // Phones: navigation's chain across the top, the map objects in a column, their children beside them.
+  const rows = [['gate', 'gatec'], ['slalom', 'slalomc'], ['torpedo', 'torpc'], ['bin', 'binc'], ['table', 'tablec'], ['pre']];
+  const rowY = (i) => 160 + i * 52;
+  const narrow = {
+    width: 392,
+    height: 445,
+    nodes: {
+      world: { x: 45, y: 30 }, odom: { x: 132, y: 30 }, base: { x: 268, y: 30 }, cam: { x: 268, y: 92 },
+      map: { x: 45, y: 120 }, offset: { x: 45, y: 290 },
+      ...Object.fromEntries(rows.flatMap(([id, child], i) => [[id, { x: 162, y: rowY(i) }], ...(child ? [[child, { x: 314, y: rowY(i) }]] : [])])),
+    },
+    edges: {
+      'world>odom': { ly: 9 }, 'world>map': { lx: 52, ly: 79, anchor: 'start' },
+      ...Object.fromEntries(rows.map(([id], i) => [`offset>${id}`, { via: [92, rowY(i)] }])),
+    },
+  };
+  new Graph(host, { width: 740, height: 390, nodes, edges, narrow, info: (n) => { note.textContent = n ? n.info : hint; } });
   host.appendChild(note);
   note.textContent = hint;
 }
@@ -180,6 +196,9 @@ async function binaryClassifier() {
     for (const v of vinyls) {
       ctx.fillStyle = v.fire ? 'rgba(217,72,15,0.25)' : 'rgba(42,120,214,0.18)';
       ctx.fillRect(sx(v.p[0]) - 0.1 * k, sy(v.p[1]) - 0.1 * k, 0.2 * k, 0.2 * k);
+      // a halo: on a phone the label can reach the bin's outline
+      ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(236,244,246,0.95)';
+      ctx.strokeText(v.fire ? 'fire' : 'blood', sx(v.p[0]) - 0.1 * k, sy(v.p[1]) + 0.1 * k + 12);
       ctx.fillStyle = css('--ink-2');
       ctx.fillText(v.fire ? 'fire' : 'blood', sx(v.p[0]) - 0.1 * k, sy(v.p[1]) + 0.1 * k + 12);
     }
@@ -199,8 +218,10 @@ async function binaryClassifier() {
       ctx.beginPath(); ctx.arc(sx(c[0]), sy(c[1]), bc.params.assignment_gate_m * k, 0, 2 * Math.PI); ctx.stroke();
       if (excl) { ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(sx(c[0]), sy(c[1]), bc.params.exclusion_radius_m * k, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]); }
       ctx.beginPath(); ctx.moveTo(sx(c[0]) - 7, sy(c[1])); ctx.lineTo(sx(c[0]) + 7, sy(c[1])); ctx.moveTo(sx(c[0]), sy(c[1]) - 7); ctx.lineTo(sx(c[0]), sy(c[1]) + 7); ctx.stroke();
-      ctx.fillStyle = color; ctx.font = '600 12px Archivo Variable, system-ui, sans-serif';
-      ctx.fillText(label, sx(c[0]) + 0.2 * k + 4, sy(c[1]) - 4);
+      ctx.font = '600 12px Archivo Variable, system-ui, sans-serif';
+      ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(236,244,246,0.95)';
+      ctx.strokeText(label, sx(c[0]) + 0.2 * k + 4, sy(c[1]) - 4);
+      ctx.fillStyle = color; ctx.fillText(label, sx(c[0]) + 0.2 * k + 4, sy(c[1]) - 4);
     };
     centroid(bc.instance1_centroid, c1, 'bin_target1', bc.state === State.ACQUIRE_SECOND || bc.state === State.TRACK_SECOND);
     centroid(bc.instance2_centroid, c2, 'bin_target2', false);
@@ -255,7 +276,7 @@ binaryClassifier();
     ['Slalom', 'ffc (assumed)', '<code>slalom_parent</code>', `MiniSearchMpc, ${sig(0.3)}, 15 s`, 'Carries on regardless, locks the map, follows a path through the three pole frames.', 2492],
     ['Random pinger', 'n/a', 'none, map locked', 'acoustics, 10 s at each candidate', 'Defaults to torpedo first.', 1884],
     ['Torpedo', 'ffc', '<code>torpedo</code>', `SearchMpc, ${sig(0.0025)}, 100 s`, 'Logs an error and goes on to the shot anyway.', 2996],
-    ['Torpedo holes', 'ffc', '<code>fire_hole_large,fire_hole_small,</code>', `both ${sig(0.0005)}, hold up to 30 s`, 'Locks the map and shoots at whatever the estimates are.', 2383],
+    ['Torpedo holes', 'ffc', '<code>fire_hole_large,<wbr>fire_hole_small,</code>', `both ${sig(0.0005)}, hold up to 30 s`, 'Locks the map and shoots at whatever the estimates are.', 2383],
     ['Table baskets', 'dfc', '<code>helmet</code>, then <code>warning</code> (all six table props as background targets)', `DownwardSearchMpc each, ${sig(0.0005)}, 60 s; then both within 1 s`, 'No <code>center_table_on_baskets</code>: "the table keeps its prior". Table pair mode is switched off.', 1706],
     ['Table pickups ×4', 'dfc', 'the item (<code>bandage</code>, <code>pill</code>, <code>nut_and_bolt</code>, <code>plug</code>)', `DownwardSearchMpc ${sig(0.5)}, 180 s; hover ${sig(0.0005)} up to 5 s`, 'Locks the map and grabs on the current estimate; drops in the helmet or warning basket.', 3219],
     ['Bins', 'dfc', 'binary classifier on <code>fire</code> → <code>bin_target1</code>, then <code>bin_target2</code>', `DownwardSearchMpc ${sig(0.02)}, 120 s; hover ${sig(0.0005)} 3 s`, 'If starting the classifier fails, the whole bins task is skipped.', 178],

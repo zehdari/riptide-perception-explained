@@ -82,10 +82,14 @@ function ellipse2(c) {
     // range rings
     ctx.strokeStyle = css('--grid'); ctx.lineWidth = 1;
     ctx.fillStyle = css('--muted'); ctx.font = '12px ' + css('--sans');
+    // Range labels just outside the left edge of the field of view, where the detection rarely is (not on the
+    // centre line, where it starts and its ray runs).
+    ctx.textAlign = 'right';
     for (let r = 1; r <= 6; r++) {
       ctx.beginPath(); ctx.arc(ox, oy, r * s, Math.PI, 2 * Math.PI); ctx.stroke();
-      ctx.fillText(`${r} m`, ox + 4, oy - r * s - 3);
+      ctx.fillText(`${r} m`, ox - r * s * Math.sin(HALF_FOV) - 5, oy - r * s * Math.cos(HALF_FOV) - 3);
     }
+    ctx.textAlign = 'left';
     // camera
     ctx.fillStyle = css('--ink');
     ctx.beginPath(); ctx.moveTo(ox, oy - 9); ctx.lineTo(ox - 8, oy + 5); ctx.lineTo(ox + 8, oy + 5); ctx.closePath(); ctx.fill();

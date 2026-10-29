@@ -11,3 +11,5 @@ aside.short li { margin-bottom: 0.4em; }
 canvas.fig-canvas { display: block; width: 100%; height: auto; border-radius: 6px; background: var(--paper); touch-action: pan-y; }
 .controls .disabled-note { color: var(--accent); font-size: 0.8rem; }
 input[type='range']:disabled { opacity: 0.35; }
+/* diagram labels drawn over lines keep a halo of the panel colour */
+svg.diagram text.halo { paint-order: stroke; stroke: var(--paper-2); stroke-width: 4px; stroke-linejoin: round; }

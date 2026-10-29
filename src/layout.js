@@ -168,6 +168,15 @@ function buildRail() {
     btn.setAttribute('aria-expanded', String(open));
   };
   document.addEventListener('click', (e) => { if (!rail.contains(e.target)) rail.classList.remove('open'); });
+  // On a phone the button floats over the page: it steps out of the way while reading down (so it doesn't sit on
+  // figures and headings) and comes back on any scroll up, or near the top.
+  let lastY = scrollY;
+  addEventListener('scroll', () => {
+    const y = scrollY;
+    if (Math.abs(y - lastY) < 8) return;
+    btn.classList.toggle('tucked', y > lastY && y > 120 && !rail.classList.contains('open'));
+    lastY = y;
+  }, { passive: true });
   return { rail, btn };
 }
 

@@ -72,8 +72,8 @@ const FRAMES = [
     nodes: [
       { id: 'yolo', x: 90, y: 150, label: 'YOLO results', sub: 'boxes + masks' },
       { id: 'torpedo', x: 420, y: 40, label: 'torpedo board', sub: 'held, resolved per frame' },
-      { id: 'pairs', x: 420, y: 115, label: 'pairs', sub: 'held, resolved per frame' },
-      { id: 'slalom', x: 420, y: 190, label: 'slalom', sub: 'closest pole' },
+      { id: 'slalom', x: 420, y: 115, label: 'slalom', sub: 'closest pole' },
+      { id: 'pairs', x: 420, y: 190, label: 'pairs', sub: 'held, resolved per frame' },
       { id: 'plane', x: 420, y: 265, label: 'plane fit', sub: 'one per box', bold: true },
       { id: 'out', x: 790, y: 150, label: 'detected_objects', sub: 'Detection3DArray' },
     ],
@@ -84,10 +84,29 @@ const FRAMES = [
       { from: 'yolo', to: 'plane', label: 'all other classes' },
       { from: 'torpedo', to: 'out' },
       { from: 'pairs', to: 'out' },
-      { from: 'pairs', to: 'plane', label: 'one member only' },
+      { from: 'pairs', to: 'plane', label: 'one member only', lx: 428, ly: 232, anchor: 'start' },
       { from: 'slalom', to: 'out' },
       { from: 'plane', to: 'out' },
     ],
     info: (n) => (note.textContent = n ? txt[n.id] : 'Hover or tap a node.'),
+    // Phones: the four paths in one column, fed from the left and merging on the right.
+    narrow: {
+      width: 370,
+      height: 430,
+      nodes: {
+        yolo: { x: 70, y: 30 }, torpedo: { x: 210, y: 105 }, slalom: { x: 210, y: 180 },
+        pairs: { x: 210, y: 255 }, plane: { x: 210, y: 330 }, out: { x: 285, y: 405 },
+      },
+      edges: {
+        'yolo>slalom': { via: [28, 180] },
+        'yolo>pairs': { via: [28, 255] },
+        'yolo>plane': { via: [28, 330], lx: 60, ly: 356, anchor: 'start' },
+        'pairs>plane': { lx: 216, ly: 297 },
+        'torpedo>out': { via: [352, 105] },
+        'slalom>out': { via: [340, 180] },
+        'pairs>out': { via: [326, 255] },
+      },
+    },
   });
+  note.textContent = 'Hover or tap a node.';
 }
