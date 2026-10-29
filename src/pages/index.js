@@ -26,7 +26,7 @@ const BASE = import.meta.env.BASE_URL;
   let view, data, speed = 16, playing = false, last = 0, t = 0, end = 1;
 
   const fmtT = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  const insets = () => (phone.matches ? [150, 10, 420, 10] : [40, 30, 120, Math.min(520, innerWidth * 0.36)]);
+  const insets = () => (phone.matches ? [172, 10, 420, 10] : [40, 30, 120, Math.min(520, innerWidth * 0.36)]);
 
   function update() {
     view.o.insets = insets();
@@ -103,11 +103,19 @@ const BASE = import.meta.env.BASE_URL;
       el.style.width = `${((e - s) / end) * 100}%`;
       el.textContent = name;
       el.title = name;
+      el.dataset.name = name;
       ph.appendChild(el);
     }
+    // a task too short to label in full gets its initial, or just its tick
+    const fitPhases = () => ph.querySelectorAll('span').forEach((el) => {
+      el.textContent = el.dataset.name;
+      if (el.scrollWidth > el.clientWidth + 1) el.textContent = el.dataset.name[0];
+      if (el.scrollWidth > el.clientWidth + 1) el.textContent = '';
+    });
+    fitPhases();
     t = d.start || 0;
     update();
-    addEventListener('resize', update);
+    addEventListener('resize', () => { fitPhases(); update(); });
     // Start playing once the hero is on screen
     new IntersectionObserver((es, ob) => {
       if (es[0].isIntersecting && !matchMedia('(prefers-reduced-motion: reduce)').matches) { setPlaying(true); ob.disconnect(); }

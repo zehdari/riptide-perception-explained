@@ -91,7 +91,7 @@
         <li><strong><code>SearchMpc</code></strong> (torpedo): sweep arcs around the estimate. When <code>SeenRecently</code> (last 0.5 s) or <code>MapConverged</code> passes, centre the detection and hold until converged or 2 s out of sight. Widen the sweep after 20 s with nothing.</li>
         <li><strong><code>DownwardSearchMpc</code></strong> (baskets, table items, bins): skip if already converged. Else hover over the estimate, follow detections, and after 3 s without one spiral out from 0.25 m to 2 m.</li>
       </ul>
-      <p>Searches steer by mapping's frame (<code>warning_frame</code>, re-aimed every 0.5 s), not the raw detection. A new target only moves once four detections agree (Chapter 7). If the camera only catches the prop at its edge, the two wait on each other; that is how the warning basket was lost in Chapter 10.</p>
+      <p>While a prop is in view, the down-camera search re-aims every 0.5 s at the latest detection itself (<code>LatestDetection</code>), and at mapping's frame only when there is none. A new target's frame only moves once four detections agree (Chapter 7), so aiming at the frame alone can hold a prop at the edge of the view until the search gives up.</p>
 
       <h2 id="watch">Things to watch</h2>
       <ul>
@@ -136,7 +136,7 @@
         <li>Seen items stay where they were seen; unseen items move with the table.</li>
         <li>Afterwards the baskets are pinned: new detections and retargeting don't move them.</li>
       </ul>
-      <p>On the exact-course Nereus run it ran: <code>Moved table by (-0.036, 0.033, -0.000) in map to fit the baskets, yawed table 0.3 deg; kept pill, plug, nut_and_bolt, bandage where they were seen</code>. On the moved-course run the warning basket was never acquired: <code>helmet,warning, not both converged below 0.0005: the table keeps its prior</code> (Chapter 10). The older combined <code>table</code> detection (<code>set_table_pair_enabled</code>) is switched off by the tree.</p>
+      <p>On the exact-course Nereus run it ran: <code>Moved table by (-0.036, 0.033, -0.000) in map to fit the baskets, yawed table 0.3 deg; kept pill, plug, nut_and_bolt, bandage where they were seen</code>. The older combined <code>table</code> detection (<code>set_table_pair_enabled</code>) is switched off by the tree.</p>
 
       <h2 id="binfit">The bin geometry fit</h2>
       <p><a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/bin_geometry.py"><code>bin_geometry.py</code></a> is a self-described temporary competition hack. <code>mapping/fit_bin_geometry</code> fits the bin's CAD model to the two classified vinyls: x, y and yaw in closed form (the configured yaw breaks the 180° ambiguity). It refuses if the baseline differs from CAD by over 10 cm or the residual is over 10 cm. Height comes from the vinyls if they agree within 10 cm, else from config. The magnets and drop targets then sit where the CAD puts them, with variance at least 0.0025 m².</p>
