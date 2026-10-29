@@ -2,9 +2,9 @@
 .course-hero .copy { max-width: 26rem; }
 .course-hero .copy p { font-size: 1.02rem; max-width: 24rem; }
 @media (max-height: 860px) and (min-width: 721px) { .course-hero .copy p { display: none; } }
-.cam-inset { position: absolute; left: clamp(1.2rem, 4vw, 3.5rem); bottom: 6.4rem; width: min(24vw, 290px); margin: 0; background: #0f2633; border-radius: 8px; overflow: hidden; box-shadow: 0 6px 24px rgba(15, 38, 51, 0.25); }
+.cam-inset { position: absolute; left: clamp(1.2rem, 4vw, 3.5rem); bottom: 6.4rem; width: min(28vw, 360px); margin: 0; background: #0f2633; border-radius: 8px; overflow: hidden; box-shadow: 0 6px 24px rgba(15, 38, 51, 0.25); }
 .cam-inset[hidden] { display: none; }
-.cam-inset img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.cam-inset video { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #0f2633; }
 .cam-inset figcaption { margin: 0; padding: 0.35rem 0.6rem 0.45rem; font-size: 0.74rem; line-height: 1.3; color: #e3eef1; max-width: none; min-height: 2.9em; }
 .cam-inset #cam-when { color: #8fb3bd; font-variant-numeric: tabular-nums; margin-right: 0.3rem; }
 
@@ -26,10 +26,11 @@
 .chapter-list a strong { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 0.18em; }
 
 @media (max-width: 720px) {
-  .course-hero { min-height: 760px; }
+  .course-hero { min-height: 800px; }
   .course-hero .copy { top: 3.4rem; right: clamp(1.2rem, 4vw, 3.5rem); }
   .course-hero .copy p { display: none; }
-  .cam-inset { display: none !important; }
+  .cam-inset { left: auto; right: 0.8rem; bottom: 17.6rem; width: 50vw; }
+  .cam-inset figcaption { display: none; }
   .course-hero .hud { max-width: none; }
   .replay { flex-basis: 100%; }
 }

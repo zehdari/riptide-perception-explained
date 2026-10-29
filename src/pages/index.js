@@ -14,16 +14,19 @@ const BASE = import.meta.env.BASE_URL;
   const hudT = document.getElementById('hud-t'), hudTarget = document.getElementById('hud-target');
   const hudOffset = document.getElementById('hud-offset'), hudLog = document.getElementById('hud-log');
   const inset = document.getElementById('cam-inset');
-  // the snapshot image is created here, so the page never ships an <img> without a source
-  const camImg = Object.assign(new Image(), { alt: "The camera at this moment, with YOLO's masks" });
-  inset.prepend(camImg);
+  // the detector's annotated image topic (yolo_orientation/annotated/compressed) from the same run, on the mission clock
+  const VIDEO = { src: 'video/cam_exact.mp4', t0: -0.01 };
+  const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, preload: 'auto', src: `${BASE}${VIDEO.src}` });
+  video.setAttribute('aria-label', "The camera Talos is using, with YOLO's masks and boxes");
+  inset.prepend(video);
+  inset.hidden = false;
   const camWhen = document.getElementById('cam-when'), camText = document.getElementById('cam-text'), hudTree = document.getElementById('hud-tree');
   let shownCard = null;
   const phone = matchMedia('(max-width: 720px)');
   let view, data, speed = 16, playing = false, last = 0, t = 0, end = 1;
 
   const fmtT = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  const insets = () => (phone.matches ? [150, 10, 280, 10] : [40, 30, 120, Math.min(520, innerWidth * 0.36)]);
+  const insets = () => (phone.matches ? [150, 10, 420, 10] : [40, 30, 120, Math.min(520, innerWidth * 0.36)]);
 
   function update() {
     view.o.insets = insets();
@@ -36,16 +39,22 @@ const BASE = import.meta.env.BASE_URL;
     hudOffset.textContent = off ? `${(Math.hypot(off[1], off[2]) * 100).toFixed(0)} cm` : '–';
     const line = at(data.log, t);
     hudLog.textContent = line && t - line[0] < 25 ? line[2] : ' ';
-    // the camera at the latest event, with what mapping or the tree said
+    // the camera: the detector's annotated stream, kept in step with the replay
+    if (video.readyState >= 1) {
+      const vt = Math.min(Math.max(t - VIDEO.t0, 0), video.duration);
+      const rate = playing && speed <= 16 ? speed : 0;
+      if (rate) {
+        if (video.playbackRate !== rate) video.playbackRate = rate;
+        if (video.paused) video.play().catch(() => {});
+      } else if (!video.paused) video.pause();
+      if (!video.seeking && Math.abs(video.currentTime - vt) > (rate ? 2 + rate * 0.2 : 0.3)) video.currentTime = vt;
+    }
+    // under it, the last thing mapping or the tree reported
     const card = at(data.cards, t);
     if (card !== shownCard) {
       shownCard = card;
-      inset.hidden = !card;
-      if (card) {
-        camImg.src = `${BASE}img/events/${card[1]}`;
-        camWhen.textContent = fmtT(card[0]);
-        camText.textContent = (card[3] === 'tree' ? 'Tree: ' : 'Mapping: ') + card[2];
-      }
+      camWhen.textContent = card ? fmtT(card[0]) : '';
+      camText.textContent = card ? (card[3] === 'tree' ? 'Tree: ' : 'Mapping: ') + card[2] : 'Forward camera, YOLO masks';
     }
     const tl = at(data.tree_log?.filter((x) => !x[1].startsWith('Message from')), t);
     hudTree.textContent = !tl ? '–' : /target\s+and\s+locking map/.test(tl[1]) ? 'locking the map'
@@ -63,6 +72,7 @@ const BASE = import.meta.env.BASE_URL;
   }
   function setPlaying(on) {
     playing = on;
+    if (!on) video.pause();
     play.textContent = on ? 'Pause' : t >= end ? 'Replay' : 'Play';
     play.setAttribute('aria-pressed', String(on));
     if (on) {
