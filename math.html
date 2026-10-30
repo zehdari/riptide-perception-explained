@@ -12,10 +12,22 @@
   <header class="page-head">
     <div class="kicker">Appendix A</div>
     <h1>The math in one place</h1>
-    <p class="lede">Every equation the detector and mapping run, in the order a detection meets them, with Talos's parameters. Nothing here is new: each block links back to the chapter that explains it.</p>
+    <p class="lede">Every equation the detector and mapping run, in the order a detection meets them, with Talos's parameters. Each one has a line in plain words under it, and links back to the chapter that explains it.</p>
   </header>
   <article>
     <div class="prose">
+      <h2 id="reading">How to read the equations</h2>
+      <p>You need vectors, matrices and a little probability. The conventions:</p>
+      <ul class="key">
+        <li><strong>Bold</strong> letters are vectors or matrices (<span class="m">\bp</span> is a 3D point, <span class="m">\P</span> a 3×3 matrix); plain letters are numbers.</li>
+        <li>A <strong>hat</strong> marks an estimate: <span class="m">\hat\bx</span> is where mapping thinks something is, <span class="m">\bx</span> where it really is.</li>
+        <li><span class="m">\mathbf v^\top</span> is the <strong>transpose</strong> (a column turned into a row), so <span class="m">\mathbf a^\top \mathbf b</span> is the dot product. <span class="m">\P^{-1}</span> is the matrix inverse, <span class="m">I</span> the identity.</li>
+        <li><span class="m">\leftarrow</span> means “replace with”, as in code: <span class="m">x \leftarrow x + 1</span>.</li>
+        <li>A <strong>covariance</strong> <span class="m">\P</span> describes an uncertain 3D position: a fuzzy ellipsoid around the estimate. Its diagonal holds the variances (standard deviation squared) along x, y and z.</li>
+        <li><span class="m">\lVert\mathbf v\rVert^2_{\P^{-1}} = \mathbf v^\top \P^{-1} \mathbf v</span> is a distance measured in standard deviations (the <strong>Mahalanobis</strong> distance): 1 m counts for little along a direction the ellipsoid is long in, a lot along one it is thin in.</li>
+        <li><span class="m">\chi^2_3(0.999)</span>: the squared Mahalanobis distance a correct 3D measurement stays under 99.9 % of the time. Anything above it is almost certainly a different object or a bad detection.</li>
+      </ul>
+
       <h2 id="notation">Notation</h2>
       <p>Camera optical frame: <span class="m">z</span> forward along the lens axis, <span class="m">x</span> right, <span class="m">y</span> down. The <code>map</code> frame is the course frame: <span class="m">z</span> up, the water surface at <span class="m">z = 0</span>. Odometry positions are in <code>map</code> too; the offset is where the course sits relative to the prior layout.</p>
       <table class="params notation">
@@ -31,7 +43,7 @@
           <tr><td><span class="m">\bp_i^{\,0}</span></td><td>prior (layout) position of map object <span class="m">i</span></td><td><span class="m">\R^3</span>, map</td></tr>
           <tr><td><span class="m">\bo_k</span></td><td>where the course sits in odometry, at fix <span class="m">k</span></td><td><span class="m">\R^3</span>, map</td></tr>
           <tr><td><span class="m">\bd_i</span></td><td>layout deviation of object <span class="m">i</span></td><td><span class="m">\R^3</span>, map</td></tr>
-          <tr><td><span class="m">\psi</span></td><td>course yaw: heading error of the whole layout</td><td>rad</td></tr>
+          <tr><td><span class="m">\psi,\ R_\psi</span></td><td>course yaw (heading error of the whole layout), and the rotation by it about the vertical</td><td>rad</td></tr>
           <tr><td><span class="m">s,\ t</span></td><td>odometry path length and time</td><td>m, s</td></tr>
         </tbody>
       </table>
@@ -40,76 +52,99 @@
       <p class="from">From <a href="calibration.html">Chapter 1</a>.</p>
       <p>A point <span class="m">(x, y, z)</span> in the camera frame lands on pixel <span class="m">(u, v)</span> through the intrinsics:</p>
       <div class="M">u = f_x\,\frac{x}{z} + c_x, \qquad v = f_y\,\frac{y}{z} + c_y \qquad\Longleftrightarrow\qquad \begin{bmatrix} u \\ v \\ 1 \end{bmatrix} \propto \underbrace{\begin{bmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{bmatrix}}_{K} \begin{bmatrix} x \\ y \\ z \end{bmatrix}</div>
-      <p><span class="m">\propto</span> means equal up to scale: <span class="m">K(x, y, z)^\top = (z u,\ z v,\ z)</span>, divided by <span class="m">z</span>.</p>
+      <p class="words"><b>In words:</b> a point twice as far away lands twice as close to the image centre. Divide x and y by the distance z, scale by the focal length, shift to the image centre. <span class="m">\propto</span> means “equal up to scale”: <span class="m">K(x, y, z)^\top = (z u,\ z v,\ z)</span>, then divide by <span class="m">z</span>. Every point on one ray lands on the same pixel, so a pixel alone gives a direction, not a distance.</p>
       <p>The lens distortion is applied to the normalized coordinates <span class="m">x' = x/z,\ y' = y/z,\ r^2 = x'^2 + y'^2</span> first (OpenCV's plumb-bob model, coefficients <span class="m">[k_1, k_2, p_1, p_2, k_3]</span>):</p>
       <div class="M" data-narrow="\begin{gathered} x'' = x'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + 2p_1 x'y' + p_2(r^2 + 2x'^2) \\[4pt] y'' = y'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + p_1(r^2 + 2y'^2) + 2p_2 x'y' \end{gathered}">x'' = x'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + 2p_1 x'y' + p_2(r^2 + 2x'^2), \qquad y'' = y'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + p_1(r^2 + 2y'^2) + 2p_2 x'y'</div>
+      <p class="words"><b>In words:</b> real lenses bend straight lines, more the farther from the centre (the <span class="m">r^2, r^4, r^6</span> terms) and a little sideways if the lens sits tilted (<span class="m">p_1, p_2</span>). Calibration measures the five numbers; the driver undoes the bending so the rest of the code can use the clean pinhole model.</p>
       <p>Underwater, rays bend at the flat port by Snell's law, which narrows the view and adds radial distortion, so the camera is calibrated in the water:</p>
       <div class="M">n_\text{air} \sin\theta_a = n_\text{water} \sin\theta_w, \qquad n_\text{water} \approx 1.33</div>
+      <p class="words"><b>In words:</b> light bends where it leaves the water and enters the camera housing, so a lens calibrated in air is wrong underwater.</p>
       <p>From a rectified stereo pair with baseline <span class="m">B</span>, depth and its error from a disparity <span class="m">d</span>:</p>
       <div class="M">z = \frac{f\,B}{d}, \qquad \delta z \approx \frac{z^2}{f\,B}\,\delta d</div>
+      <p class="words"><b>In words:</b> depth comes from how far a point shifts between the left and right image (the disparity <span class="m">d</span>). Far points barely shift, so a one-pixel mistake costs more the farther away the point is: the error grows with distance squared.</p>
 
       <h2 id="pose">A mask becomes a pose</h2>
       <p class="from">From <a href="pose.html">Chapter 4</a>.</p>
       <p>Grid-sample the mask every 8 px (at most 500 samples) and back-project each through its depth <span class="m">z</span>:</p>
       <div class="M">x = \frac{(u - c_x)\, z}{f_x}, \qquad y = \frac{(v - c_y)\, z}{f_y}, \qquad \bp = (x,\, y,\, z)</div>
+      <p class="words"><b>In words:</b> the camera model run backwards: a pixel plus its depth gives a 3D point.</p>
       <p>Keep the points whose depth is within three robust standard deviations of the median (the depth gate):</p>
       <div class="M">m = \operatorname{median}(z_i), \qquad s = \max\!\big(1.4826\,\operatorname{median}|z_i - m|,\; 0.05\ \text{m}\big), \qquad \text{keep } |z_i - m| \le 3\,s</div>
+      <p class="words"><b>In words:</b> throw away mask samples whose depth is far from the typical depth, e.g. pixels that hit the wall behind the prop. 1.4826 × the median absolute deviation estimates a standard deviation that a few wild values cannot drag around.</p>
       <p>then a radius pass (more than <span class="m">\min(10, 0.8n)</span> neighbours within 1 m) and a statistical pass (mean distance to the <span class="m">k</span> nearest neighbours below the mean plus one standard deviation). The plane is the direction of least spread of what is left:</p>
       <div class="M">\bar\bp = \frac1n \sum_i \bp_i, \qquad \begin{bmatrix} (\bp_1 - \bar\bp)^\top \\ \vdots \\ (\bp_n - \bar\bp)^\top \end{bmatrix} = U \Sigma V^\top, \qquad \bn = V_{:,3}, \quad \bn \leftarrow -\bn \text{ if } n_z > 0</div>
+      <p class="words"><b>In words:</b> fit a flat surface through the points. The SVD finds the three directions the points spread along; a flat prop spreads in two, and the third, the one with the least spread, is its surface normal <span class="m">\bn</span>. It is flipped, if needed, to face the camera.</p>
       <p>The published position is the box centre <span class="m">(u_b, v_b)</span> back-projected at the points' mean depth, and the orientation puts body <span class="m">+z</span> on the normal:</p>
       <div class="M">\mathbf c = \Big(\tfrac{(u_b - c_x)\, \bar z}{f_x},\; \tfrac{(v_b - c_y)\, \bar z}{f_y},\; \bar z\Big), \qquad R = \big[\, \mathbf e_1 \;\; \mathbf e_2 \;\; \bn \,\big], \quad \mathbf e_1 = \frac{\bn \times \mathbf a}{\lVert \bn \times \mathbf a \rVert},\ \mathbf e_2 = \bn \times \mathbf e_1</div>
+      <p class="words"><b>In words:</b> the position is the middle of the detection box pushed out to the surface's depth. The orientation is built from the normal plus a second axis that is never parallel to it, so the frame is always well defined.</p>
       <p class="eq-note"><span class="m">\mathbf a</span> is the camera <span class="m">x</span> axis, or <span class="m">y</span> when the normal is within 26° of <span class="m">x</span>; the first column is negated if <span class="m">\det R &lt; 0</span>.</p>
 
       <h2 id="composites">The torpedo board</h2>
       <p class="from">From <a href="composites.html">Chapter 5</a>.</p>
       <p>One plane is fitted to the pooled points of every symbol on the board (fire and blood required, ambulance and fire engine optional), anchored at the mean symbol centroid <span class="m">\mathbf a</span>. Each symbol and circle centre is then intersected with that plane along its camera ray:</p>
       <div class="M">\mathbf d = \frac{K^{-1}(u, v, 1)^\top}{\lVert K^{-1}(u, v, 1)^\top \rVert}, \qquad t = \frac{\bn \cdot \mathbf a}{\bn \cdot \mathbf d}, \qquad \mathbf p = t\,\mathbf d</div>
+      <p class="words"><b>In words:</b> turn each pixel into a direction <span class="m">\mathbf d</span> from the camera, then slide along it until it hits the board's plane (at distance <span class="m">t</span>). This places small things, like the holes, on the board even when their own depth is poor.</p>
       <p>With an in-plane basis <span class="m">(\mathbf e_u, \mathbf e_v)</span>, the board centre is the middle of the projected points' extent, and the four holes split two and two along the fire-to-blood axis:</p>
       <div class="M">\mathbf c = \mathbf p_0 + \tfrac12\big(\min_j u_j + \max_j u_j\big)\,\mathbf e_u + \tfrac12\big(\min_j v_j + \max_j v_j\big)\,\mathbf e_v, \qquad s_h = (\mathbf p_h - \mathbf p_\text{fire}) \cdot \frac{\mathbf p_\text{blood} - \mathbf p_\text{fire}}{\lVert \mathbf p_\text{blood} - \mathbf p_\text{fire} \rVert}</div>
+      <p class="words"><b>In words:</b> the board centre is halfway between its outermost symbols. <span class="m">s_h</span> measures how far each hole is along the line from fire to blood, so the two holes nearest fire belong to fire.</p>
       <p class="eq-note">The two smallest <span class="m">s_h</span> are fire's holes; of each pair, the one nearer its symbol is the large hole.</p>
 
       <h2 id="noise">How much a detection is worth</h2>
       <p class="from">From <a href="noise.html">Chapter 6</a>.</p>
       <p>Standard deviation across the camera ray and along it, at range <span class="m">r</span>, with the vehicle turning at <span class="m">\omega</span> and moving at <span class="m">v</span> and a stamp error <span class="m">t_s</span>:</p>
       <div class="M">\sigma_\perp^2 = (b + k_\perp r)^2 + (\omega\, t_s\, r)^2, \qquad \sigma_\parallel = b + k_\parallel\, r + k_2\, r^2</div>
+      <p class="words"><b>In words:</b> a detection is less certain the farther away it is, more so along the camera ray (depth) than across it, and more while the robot turns or moves, because the image and the robot's pose are never stamped at exactly the same moment.</p>
       <div class="M">\Rm_\text{cam} = \sigma_\perp^2 I + (\sigma_\parallel^2 - \sigma_\perp^2)\,\hat u \hat u^\top + (v t_s)^2 I, \qquad \Rm = \Rm_{pc}\, \Rm_\text{cam}\, \Rm_{pc}^\top</div>
+      <p class="words"><b>In words:</b> this turns the two standard deviations into a cigar-shaped ellipsoid pointing along the ray (<span class="m">\hat u\hat u^\top</span> picks the along-ray direction), then rotates it from the camera into the object's frame.</p>
       <p>where <span class="m">\Rm_{pc}</span> rotates the camera frame into the object's parent frame. A detection <span class="m">\Delta t</span> after the object's last accepted one shares most of its error, so</p>
       <div class="M">\Rm \leftarrow \Rm \cdot \min\!\Big(\max\!\big(1,\ \tfrac{\tau}{\Delta t}\big),\ 30\Big), \qquad \Delta t \ge 1\ \text{ms}</div>
+      <p class="words"><b>In words:</b> thirty detections of the same object a fraction of a second apart are not thirty independent measurements, so each counts for less: covariance is inflated up to 30× for detections closer together than <span class="m">\tau</span>.</p>
       <p>Detected yaw is the heading of the normal in the parent frame, <span class="m">\operatorname{atan2}(n_y, n_x)</span>, with a fixed 3° standard deviation, inflated the same way.</p>
 
       <h2 id="tracking">Tracking one object</h2>
       <p class="from">From <a href="tracking.html">Chapter 7</a>.</p>
       <p>A three-state Kalman update in the object's parent frame, in Joseph form:</p>
       <div class="M" data-narrow="\begin{gathered} \boldsymbol\nu = \bz - \hat\bx, \quad \mathbf S = \P + \Rm, \quad \K = \P\mathbf S^{-1} \\[6pt] \hat\bx \leftarrow \hat\bx + \K\boldsymbol\nu, \qquad \P \leftarrow (I - \K)\,\P\,(I - \K)^\top + \K\Rm\K^\top \end{gathered}">\boldsymbol\nu = \bz - \hat\bx, \quad \mathbf S = \P + \Rm, \quad \K = \P\mathbf S^{-1}, \qquad \hat\bx \leftarrow \hat\bx + \K\boldsymbol\nu, \qquad \P \leftarrow (I - \K)\,\P\,(I - \K)^\top + \K\Rm\K^\top</div>
+      <p class="words"><b>In words:</b> <span class="m">\boldsymbol\nu</span> is the surprise: how far the detection is from the estimate. The gain <span class="m">\K</span> decides how much of it to believe: when the track is uncertain (<span class="m">\P</span> large) and the detection good (<span class="m">\Rm</span> small) the estimate jumps most of the way, in the opposite case it barely moves. <span class="m">\P</span> then shrinks. The “Joseph form” is the same update written so rounding errors cannot make the covariance invalid.</p>
       <p>Once the track has 10 accepted detections, a detection is rejected when</p>
       <div class="M">\boldsymbol\nu^\top \mathbf S^{-1} \boldsymbol\nu \;>\; 16.27 \;=\; \chi^2_3(0.999)</div>
+      <p class="words"><b>In words:</b> reject a detection that is too far from the estimate, measured in standard deviations of both together (<span class="m">\mathbf S = \P + \Rm</span>).</p>
       <p>and 30 rejections in a row restart the track. Yaw is a scalar filter on the wrapped innovation <span class="m">\operatorname{wrap}(\psi_z - \hat\psi)</span>, gated at <span class="m">\chi^2_1(0.999) = 10.83</span>. A map object's track ages between sightings by the odometry drift since it was last seen, <span class="m">\P \leftarrow \P + \Q(\Delta s, \Delta t)</span> (below).</p>
       <p><strong>Acquisition.</strong> Until a track has accepted a detection, detections are held for 4 s. Two agree when</p>
       <div class="M">\lVert \bz_a - \bz_b \rVert \;\le\; \max\!\Big(0.3\ \text{m},\ 3\sqrt{\lambda_\text{max}(\Rm_a + \Rm_b)}\Big)</div>
+      <p class="words"><b>In words:</b> two detections agree if they are within 30 cm, or within three standard deviations when they are noisier than that.</p>
       <p>The largest group of detections that agree with one member starts the track once it has 4 members. It needs 12, spanning at least 2 s, when its mean <span class="m">\bar\bz</span> is far from where the map expects the object:</p>
       <div class="M">(\bar\bz - \hat\bp)^\top \Big(\boldsymbol\Sigma_{\hat\bp} + \tfrac1m \textstyle\sum_{j} \Rm_j\Big)^{-1} (\bar\bz - \hat\bp) \;>\; 16.27</div>
+      <p class="words"><b>In words:</b> if the agreeing group is far from where the map expected the object (beyond the 99.9 % gate), it might be a false detection, so it needs more evidence: 12 detections over 2 s instead of 4.</p>
 
       <h2 id="map">The course map</h2>
       <p class="from">From <a href="map.html">Chapter 8</a>.</p>
       <p>Every map-parented object is the prior layout, turned by the course yaw, plus where the course sits in odometry, plus that object's own layout error:</p>
-      <div class="M">\bp_i = \Rm(\psi)\,\bp_i^{\,0} + \bo + \bd_i</div>
+      <div class="M">\bp_i = R_\psi\,\bp_i^{\,0} + \bo + \bd_i</div>
+      <p class="words"><b>In words:</b> where prop <span class="m">i</span> really is = the measured layout, turned by any heading error of the whole course, shifted by where the course actually sits, plus a small correction for that prop alone.</p>
       <p>The offset random-walks with distance travelled and time:</p>
       <div class="M">\Q(\Delta s, \Delta t) = \operatorname{diag}\big(q_{s}\Delta s + q_{t}\Delta t,\ \ q_{s}\Delta s + q_{t}\Delta t,\ \ q_{s,z}\Delta s + q_{t,z}\Delta t\big)</div>
+      <p class="words"><b>In words:</b> odometry slowly drifts, so the course's apparent position can wander: its variance grows a little with every metre driven (<span class="m">q_s</span>) and every second (<span class="m">q_t</span>). <span class="m">\operatorname{diag}</span> is a matrix with those numbers on the diagonal and zeros elsewhere.</p>
       <p>A track with 10 detections becomes a <strong>fix</strong> <span class="m">(\bz_k, \P_k)</span> at the path length <span class="m">s_k</span> it was last seen. Two fixes of one object less than 1 m of travel apart merge:</p>
       <div class="M">\P = \left(\P_a^{-1} + \P_b^{-1}\right)^{-1}, \qquad \bz = \P\left(\P_a^{-1}\bz_a + \P_b^{-1}\bz_b\right)</div>
+      <p class="words"><b>In words:</b> two looks at the same object combine like a weighted average, each weighted by how certain it is (the inverse covariance). The result is more certain than either.</p>
       <p>With the fixes sorted by path length, one offset node per fix, one deviation per object seen, and the course yaw, the solve minimizes</p>
-      <div class="M" data-narrow="\begin{aligned} J =\;&amp; \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - \Rm(\psi)\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} \\ &amp;+ \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} \\ &amp;+ \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right) \end{aligned}">J = \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - \Rm(\psi)\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} + \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} + \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right)</div>
+      <div class="M" data-narrow="\begin{aligned} J =\;&amp; \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - R_\psi\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} \\ &amp;+ \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} \\ &amp;+ \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right) \end{aligned}">J = \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - R_\psi\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} + \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} + \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right)</div>
+      <p class="words"><b>In words:</b> <span class="m">J</span> is a total penalty that the solve makes as small as possible. Term by term: the course heading should be close to the layout's; every fix should match the model above; the course offset should start near zero and change only as much as drift allows between fixes; and each prop should sit near its layout position. Every term is a squared distance in standard deviations, so a well-measured sighting outweighs a vague one.</p>
       <p class="eq-note"><span class="m">\Q_k</span> is the drift between consecutive fixes (plus <span class="m">10^{-6}</span> on the diagonal), <span class="m">\Q_1</span> the drift up to the first, <span class="m">\boldsymbol\Sigma_o</span> the offset's start prior and <span class="m">\boldsymbol\Sigma_L</span> the layout prior.</p>
       <p>The layout term is Cauchy-robust, solved by iteratively reweighted least squares (the rotation linearized about the current <span class="m">\psi</span> each pass):</p>
       <div class="M">\rho(r^2) = s^2 \log\!\left(1 + \frac{r^2}{s^2}\right), \qquad w(r^2) = \frac{1}{1 + r^2/s^2}, \qquad s = 2</div>
+      <p class="words"><b>In words:</b> a plain squared penalty would let one badly placed prop drag the whole map. <span class="m">\rho</span> grows only slowly for large errors, so a prop far from its layout gets a low weight <span class="m">w</span> and stops pulling on the others. “Iteratively reweighted” means: solve, recompute the weights, solve again.</p>
       <p>A new set of fixes is solved from zero, from every start that blames one prior (its weight set to 0 for the first pass), and from the last answer; the lowest <span class="m">J</span> wins. An object with <span class="m">w &lt; 0.5</span> is <strong>released</strong>. Every object's estimate, seen or not, is then</p>
-      <div class="M" data-narrow="\begin{gathered} \hat\bp_i = \Rm(\hat\psi)\,\bp_i^{\,0} + \hat\bo + \hat\bd_i \\[6pt] \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L \text{ if unseen}\big] \end{gathered}">\hat\bp_i = \Rm(\hat\psi)\,\bp_i^{\,0} + \hat\bo + \hat\bd_i, \qquad \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L \text{ if unseen}\big]</div>
-      <p class="eq-note"><span class="m">\mathbf A</span> is the normal matrix at the solution, <span class="m">\mathbf J = [\,\partial \Rm(\psi)\bp^{\,0}_i/\partial\psi \;\; I \;\; I\,]</span>, and <span class="m">\Delta s, \Delta t</span> the travel since the newest fix.</p>
+      <div class="M" data-narrow="\begin{gathered} \hat\bp_i = R_{\hat\psi}\,\bp_i^{\,0} + \hat\bo + \hat\bd_i \\[6pt] \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L \text{ if unseen}\big] \end{gathered}">\hat\bp_i = R_{\hat\psi}\,\bp_i^{\,0} + \hat\bo + \hat\bd_i, \qquad \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L \text{ if unseen}\big]</div>
+      <p class="words"><b>In words:</b> the published estimate of each prop is the model above with the solved values. Its uncertainty comes from the solve's uncertainty in heading, offset and that prop's correction, plus the drift since the last sighting, plus the full layout uncertainty for a prop not seen yet.</p>
+      <p class="eq-note"><span class="m">\mathbf A</span> is the normal matrix at the solution, <span class="m">\mathbf J = [\,\partial (R_\psi\bp^{\,0}_i)/\partial\psi \;\; I \;\; I\,]</span>, and <span class="m">\Delta s, \Delta t</span> the travel since the newest fix.</p>
 
       <h2 id="published">What is published</h2>
       <p class="from">From <a href="frames.html">Chapter 9</a>.</p>
       <p>Until an object is confirmed by fresh detections while targeted (10, or 3 that agree with a known estimate), its published covariance is floored:</p>
       <div class="M">\boldsymbol\Sigma_\text{pub} = \boldsymbol\Sigma + \operatorname{diag}\big(\max(1 - \Sigma_{jj},\ 0)\big), \qquad \sigma^2_{\text{roll}} = \sigma^2_{\text{pitch}} = 0.1, \qquad \sigma^2_\text{yaw} \ge 0.1</div>
+      <p class="words"><b>In words:</b> until autonomy has looked at an object on purpose, its published uncertainty is kept at 1 m or more, so a tree waiting for a tight covariance never acts on an estimate nobody checked.</p>
 
       <h2 id="params">Talos's parameters</h2>
       <p class="from">From <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/config/config.yaml"><code>riptide_mapping/config/config.yaml</code></a> and <a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/tensor_detector/config/yolo_orientation.yaml"><code>tensor_detector/config/yolo_orientation.yaml</code></a>.</p>

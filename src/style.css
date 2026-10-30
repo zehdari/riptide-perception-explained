@@ -152,6 +152,9 @@ svg.chart .crosshair { stroke: var(--ink-2); stroke-width: 1; }
 .katex { font-size: 1.06em; }
 .katex-display { margin: 1.3rem 0 1.5rem; overflow-x: auto; overflow-y: hidden; padding: 0.2rem 0; }
 .eq-note { font-family: var(--sans); font-size: 0.86rem; color: var(--ink-2); margin-top: -0.6rem; }
+.words { font-family: var(--sans); font-size: 0.92rem; line-height: 1.5; color: var(--ink-2); margin-top: -0.5rem; padding-left: 0.8rem; border-left: 2px solid var(--rule); }
+.words b { color: var(--ink); font-weight: 600; }
+.sheet ul.key li { margin-bottom: 0.35em; }
 
 
 .src { font-family: var(--sans); font-size: 0.84rem; color: var(--ink-2); }

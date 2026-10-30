@@ -46,7 +46,7 @@
     <div class="prose">
       <h2 id="model">One shift for the course, one correction per prop</h2>
       <p>Every map-parented object <span class="m">i</span> (gate, slalom, torpedo board, bins, table, waypoints) is its prior, turned by a small course yaw, plus a shared offset, plus its own deviation:</p>
-      <div class="M">\bp_i = \Rm(\psi)\,\bp_i^{\,0} + \bo + \bd_i</div>
+      <div class="M">\bp_i = R_\psi\,\bp_i^{\,0} + \bo + \bd_i</div>
       <ul>
         <li><span class="m">\bp_i^{\,0}</span>: the prior from <code>init_data</code>.</li>
         <li><span class="m">\bo</span>, the <strong>offset</strong>: one 3-vector, published as the TF <code>map → offset</code>; every map object's frame hangs off it.</li>
@@ -74,7 +74,7 @@
 
       <h2 id="solve">The solve</h2>
       <p>Whenever fixes change, mapping solves for everything at once (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L488"><code>_solve</code></a>). Each fix <span class="m">k</span> gets its own offset node <span class="m">\bo_k</span>, each seen object a deviation: <span class="m">1 + 3K + 3N</span> unknowns, around 40 on a full run. Fixes should match the model, consecutive offsets should differ by no more than the drift <span class="m">\Q_k</span>, and the priors are paid:</p>
-      <div class="M" data-narrow="\begin{aligned} J =\;&amp; \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - \Rm(\psi)\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} \\ &amp;+ \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} \\ &amp;+ \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right) \end{aligned}">J = \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - \Rm(\psi)\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} + \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} + \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right)</div>
+      <div class="M" data-narrow="\begin{aligned} J =\;&amp; \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - R_\psi\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} \\ &amp;+ \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} \\ &amp;+ \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right) \end{aligned}">J = \frac{\psi^2}{\sigma_\psi^2} + \sum_k \big\|\bz_k - R_\psi\bp^{\,0}_{i(k)} - \bo_k - \bd_{i(k)}\big\|^2_{\P_k^{-1}} + \|\bo_1\|^2_{(\boldsymbol\Sigma_o + \Q_1)^{-1}} + \sum_{k} \|\bo_{k+1} - \bo_k\|^2_{\Q_{k}^{-1}} + \sum_i \rho\!\left(\|\bd_i\|^2_{\boldsymbol\Sigma_L^{-1}}\right)</div>
       <p class="eq-note">‖v‖²<sub>W</sub> = vᵀWv. Σ<sub>o</sub> is the start-offset prior, Σ<sub>L</sub> the layout prior, Q(Δs, Δt) = diag(0.002 Δs + 10⁻⁵ Δt, …) the drift. ρ is the robust penalty of the next section.</p>
       <p>Only the yaw is nonlinear. The code linearizes it, solves the normal equations <span class="m">\mathbf A\bx = \mathbf b</span> densely, and iterates until nothing moves more than 10⁻⁷ (at most 30 times). <span class="m">\mathbf A^{-1}</span> at the answer is the covariance of every unknown.</p>
     </div>
@@ -86,7 +86,7 @@
 
     <div class="prose">
       <p>Every map object is then <strong>predicted</strong> from the newest offset node plus drift since (<a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/map_estimator.py#L276"><code>_predicted</code></a>):</p>
-      <div class="M">\hat\bp_i = \Rm(\hat\psi)\,\bp_i^{\,0} + \hat\bo + \hat\bd_i, \qquad \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L\big]</div>
+      <div class="M">\hat\bp_i = R_{\hat\psi}\,\bp_i^{\,0} + \hat\bo + \hat\bd_i, \qquad \boldsymbol\Sigma_i = \mathbf J\,\mathbf A^{-1}_{[\psi,\bo,\bd_i]}\,\mathbf J^\top + \Q(\Delta s, \Delta t)\;\big[\,+\,\boldsymbol\Sigma_L\big]</div>
       <p>A never-seen object has no <span class="m">\hat\bd_i</span> and gets <span class="m">\boldsymbol\Sigma_L</span> added: "where the layout says, moved with the course, give or take 25 cm". Autonomy drives to that.</p>
 
       <h3 id="split">One sighting can't tell the two apart</h3>
