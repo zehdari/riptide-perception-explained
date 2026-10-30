@@ -38,3 +38,4 @@
 }
 .part-label { font-family: var(--sans); font-size: 0.78rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 1.4rem 0 0.4rem; }
 
+#pipeline-graph svg.graph .elabel { stroke: var(--paper-3); }

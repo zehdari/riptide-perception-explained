@@ -29,6 +29,7 @@
         <li><span class="m">f_x, f_y</span>: focal length in pixels.</li>
         <li><span class="m">(c_x, c_y)</span>: the <strong>principal point</strong>, where the lens axis hits the image.</li>
         <li><span class="m">K</span>: the same four numbers as a matrix.</li>
+        <li><span class="m">\propto</span>: “proportional to”, equal up to a scale factor. <span class="m">K(x, y, z)^\top</span> comes out as <span class="m">(z u,\ z v,\ z)</span>; dividing by the last entry, <span class="m">z</span>, gives <span class="m">(u, v, 1)</span>. So every point along one ray lands on the same pixel: a pixel alone gives a direction, not a distance, which is why the detector needs depth.</li>
       </ul>
       <p>Talos's forward camera (underwater, 1920×1200): <span class="m">f_x = 1701.5</span>, <span class="m">f_y = 1702.4</span>, <span class="m">c_x = 935.2</span>, <span class="m">c_y = 579.4</span>, a 59° wide view.</p>
       <p>A pixel alone gives only a direction, <span class="m">((u - c_x)/f_x,\ (v - c_y)/f_y,\ 1)</span>. The depth image supplies the distance (Chapter 4).</p>

@@ -40,7 +40,8 @@
       <p class="from">From <a href="calibration.html">Chapter 1</a>.</p>
       <p>A point <span class="m">(x, y, z)</span> in the camera frame lands on pixel <span class="m">(u, v)</span> through the intrinsics:</p>
       <div class="M">u = f_x\,\frac{x}{z} + c_x, \qquad v = f_y\,\frac{y}{z} + c_y \qquad\Longleftrightarrow\qquad \begin{bmatrix} u \\ v \\ 1 \end{bmatrix} \propto \underbrace{\begin{bmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{bmatrix}}_{K} \begin{bmatrix} x \\ y \\ z \end{bmatrix}</div>
-      <p>with the lens distortion applied to the normalized coordinates <span class="m">x' = x/z,\ y' = y/z,\ r^2 = x'^2 + y'^2</span> first (OpenCV's plumb-bob model, coefficients <span class="m">[k_1, k_2, p_1, p_2, k_3]</span>):</p>
+      <p><span class="m">\propto</span> means equal up to scale: <span class="m">K(x, y, z)^\top = (z u,\ z v,\ z)</span>, divided by <span class="m">z</span>.</p>
+      <p>The lens distortion is applied to the normalized coordinates <span class="m">x' = x/z,\ y' = y/z,\ r^2 = x'^2 + y'^2</span> first (OpenCV's plumb-bob model, coefficients <span class="m">[k_1, k_2, p_1, p_2, k_3]</span>):</p>
       <div class="M" data-narrow="\begin{gathered} x'' = x'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + 2p_1 x'y' + p_2(r^2 + 2x'^2) \\[4pt] y'' = y'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + p_1(r^2 + 2y'^2) + 2p_2 x'y' \end{gathered}">x'' = x'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + 2p_1 x'y' + p_2(r^2 + 2x'^2), \qquad y'' = y'\,(1 + k_1 r^2 + k_2 r^4 + k_3 r^6) + p_1(r^2 + 2y'^2) + 2p_2 x'y'</div>
       <p>Underwater, rays bend at the flat port by Snell's law, which narrows the view and adds radial distortion, so the camera is calibrated in the water:</p>
       <div class="M">n_\text{air} \sin\theta_a = n_\text{water} \sin\theta_w, \qquad n_\text{water} \approx 1.33</div>

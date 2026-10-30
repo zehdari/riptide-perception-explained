@@ -122,19 +122,19 @@ const BASE = import.meta.env.BASE_URL;
 {
   const SRC = 'https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator';
   const nodes = [
-    { id: 'cam', label: 'ZED X Mini', sub: 'RGB + depth', x: 0, y: 0, info: 'Two stereo cameras: ffc looks forward, dfc down. Each publishes a compressed colour image and a depth map registered to it, 1920 × 1200.' },
-    { id: 'sync', label: 'Pair by stamp', sub: 'depth ring buffer', x: 1, y: 0, info: 'Depth arrives after the colour frame, so the detector keeps the last 15 depth maps (at most 1 s old) and uses the one taken closest to each image.', href: `${SRC}/tensor_detector/src/yolo_orientation.py` },
-    { id: 'yolo', label: 'YOLO26n-seg', sub: 'TensorRT', x: 2, y: 0, info: 'A segmentation network: for each object, a class, a confidence, a box and a pixel mask. One model per camera, exported to a TensorRT engine on the robot.', href: `${SRC}/tensor_detector/src/yolo_model.py` },
-    { id: 'fit', label: 'Mask → pose', sub: 'sample, gate, SVD', x: 3, y: 0, info: 'Grid-sample the mask, back-project each sample through its depth, drop background and outliers, fit a plane: centroid plus surface normal.', href: `${SRC}/tensor_detector/src/detection.py` },
-    { id: 'comp', label: 'Composites', sub: 'torpedo, pairs, slalom', x: 4, y: 0, info: 'Props made of several detections: the torpedo board and its four holes, the gate halves and table from pairs of symbols, the nearest slalom pole.', href: `${SRC}/tensor_detector/src/detection.py` },
-    { id: 'det', label: 'detected_objects', sub: 'camera frame', x: 4, y: 1, info: 'vision_msgs/Detection3DArray: class, score and pose of each detection, in the camera\'s optical frame, stamped with the image time.' },
-    { id: 'tf', label: 'Into the parent frame', sub: 'TF at the stamp', x: 3, y: 1, info: 'Each detection is transformed into its object\'s parent frame (map, or another prop\'s frame) with TF looked up at the image stamp, and given a covariance from the noise model.', href: `${SRC}/riptide_mapping/riptide_mapping2/mapping.py` },
-    { id: 'track', label: 'Per-object filter', sub: 'agree, gate, update', x: 2, y: 1, info: 'A 3-state Kalman filter per object. New detections wait until a few agree; later ones far from the estimate are rejected.', href: `${SRC}/riptide_mapping/riptide_mapping2/map_estimator.py` },
-    { id: 'solve', label: 'Course map', sub: 'offset + deviations', x: 1, y: 1, info: 'A robust least-squares solve over every sighting: where the course sits in odometry (the offset), how far each prop is from the layout, and the course\'s heading error.', href: `${SRC}/riptide_mapping/riptide_mapping2/map_estimator.py` },
-    { id: 'pub', label: 'TF + covariance', sub: 'mapping/<object>', x: 0, y: 1, info: 'Every object as a TF frame (map → offset → <object>_frame) and a PoseWithCovarianceStamped. Autonomy and the MPC steer by these frames.' },
-    { id: 'auto', label: 'Autonomy', sub: 'behaviour trees', x: 0, y: 2, info: 'The behaviour trees set mapping\'s target (which props it may update), wait for the covariance to shrink, and drive to the frames.' },
+    { id: 'cam', label: 'ZED X Mini', sub: 'RGB + depth', x: 85, y: 140, info: 'Two stereo cameras: ffc looks forward, dfc down. Each publishes a compressed colour image and a depth map registered to it, 1920 × 1200.' },
+    { id: 'sync', label: 'Pair by stamp', sub: 'depth ring buffer', x: 250, y: 140, info: 'Depth arrives after the colour frame, so the detector keeps the last 15 depth maps (at most 1 s old) and uses the one taken closest to each image.', href: `${SRC}/tensor_detector/src/yolo_orientation.py` },
+    { id: 'yolo', label: 'YOLO26n-seg', sub: 'TensorRT', x: 415, y: 140, info: 'A segmentation network: for each object, a class, a confidence, a box and a pixel mask. One model per camera, exported to a TensorRT engine on the robot.', href: `${SRC}/tensor_detector/src/yolo_model.py` },
+    { id: 'fit', label: 'Mask → pose', sub: 'sample, gate, SVD', x: 580, y: 140, info: 'Grid-sample the mask, back-project each sample through its depth, drop background and outliers, fit a plane: centroid plus surface normal.', href: `${SRC}/tensor_detector/src/detection.py` },
+    { id: 'comp', label: 'Composites', sub: 'torpedo, pairs, slalom', x: 697, y: 66, info: 'Only for props made of several detections: the torpedo board and its four holes, the gate halves and table from pairs of symbols, the nearest slalom pole. Every other detection goes straight to detected_objects.', href: `${SRC}/tensor_detector/src/detection.py` },
+    { id: 'det', label: 'detected_objects', sub: 'camera frame', x: 815, y: 140, info: 'vision_msgs/Detection3DArray: class, score and pose of each detection, in the camera\'s optical frame, stamped with the image time.' },
+    { id: 'tf', label: 'Into the parent frame', sub: 'TF at the stamp', x: 815, y: 262, info: 'Each detection is transformed into its object\'s parent frame (map, or another prop\'s frame) with TF looked up at the image stamp, and given a covariance from the noise model.', href: `${SRC}/riptide_mapping/riptide_mapping2/mapping.py` },
+    { id: 'track', label: 'Per-object filter', sub: 'agree, gate, update', x: 600, y: 262, info: 'A 3-state Kalman filter per object. New detections wait until a few agree; later ones far from the estimate are rejected.', href: `${SRC}/riptide_mapping/riptide_mapping2/map_estimator.py` },
+    { id: 'solve', label: 'Course map', sub: 'offset + deviations', x: 385, y: 262, info: 'A robust least-squares solve over every sighting: where the course sits in odometry (the offset), how far each prop is from the layout, and the course\'s heading error.', href: `${SRC}/riptide_mapping/riptide_mapping2/map_estimator.py` },
+    { id: 'pub', label: 'TF + covariance', sub: 'mapping/<object>', x: 170, y: 262, info: 'Every object as a TF frame (map → offset → <object>_frame) and a PoseWithCovarianceStamped. Autonomy and the MPC steer by these frames.' },
+    { id: 'auto', label: 'Autonomy', sub: 'behaviour trees', x: 170, y: 370, info: 'The behaviour trees set mapping\'s target (which props it may update), wait for the covariance to shrink, and drive to the frames.' },
   ];
-  const edges = [['cam', 'sync'], ['sync', 'yolo'], ['yolo', 'fit'], ['fit', 'comp'], ['comp', 'det'], ['det', 'tf'], ['tf', 'track'], ['track', 'solve'], ['solve', 'pub'], ['pub', 'auto'], ['auto', 'track', 'target']];
+  const edges = [['cam', 'sync'], ['sync', 'yolo'], ['yolo', 'fit'], ['fit', 'det'], ['fit', 'comp'], ['comp', 'det'], ['det', 'tf'], ['tf', 'track'], ['track', 'solve'], ['solve', 'pub'], ['pub', 'auto']];
   const host = document.getElementById('pipeline-graph');
   const note = document.createElement('div');
   note.className = 'graph-note';
@@ -143,21 +143,32 @@ const BASE = import.meta.env.BASE_URL;
     const n = byId[id || 'track'];
     note.innerHTML = `<b>${n.label}.</b> ${n.info}${n.href ? ` <a href="${n.href}">${n.href.split('/').pop()}</a>` : ''}`;
   };
+  // One picture in three bands: vision (a frame to poses), mapping (poses to a map), autonomy (which props mapping may move).
+  const band = (label, x0, y0, x1, y1) => ({ label, points: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]] });
   const g = new Graph(host, {
     width: 900,
-    height: 340,
-    nodes: nodes.map((n) => ({ id: n.id, label: n.label, sub: n.sub, x: 90 + n.x * 180, y: 50 + n.y * 125, w: 150 })),
-    edges: edges.map(([from, to, label]) => ({ from, to, label, dash: label === 'target', bend: label === 'target' ? 40 : 0 })),
+    height: 414,
+    bands: [band('VISION', 12, 12, 888, 180), band('MAPPING', 12, 210, 888, 300), band('AUTONOMY', 12, 322, 888, 400)],
+    nodes: nodes.map((n) => ({ id: n.id, label: n.label, sub: n.sub, x: n.x, y: n.y, w: 140 })),
+    edges: [
+      ...edges.map(([from, to]) => ({ from, to })),
+      { from: 'auto', to: 'track', label: 'target', dash: true, via: [470, 395] },
+    ],
     onSelect: say,
-    // Phones: two columns, snaking down; vision in the top half, mapping in the bottom half.
+    // Phones: two columns, snaking down, in the same three bands.
     narrow: {
       width: 340,
-      height: 445,
+      height: 500,
+      bands: [
+        band('VISION', 8, 8, 332, 236),
+        { label: 'MAPPING', points: [[8, 258], [332, 258], [332, 488], [184, 488], [184, 340], [8, 340]] },
+        band('AUTONOMY', 8, 362, 156, 488),
+      ],
       nodes: Object.fromEntries(Object.entries({
-        cam: [0, 0], sync: [1, 0], yolo: [1, 1], fit: [0, 1], comp: [0, 2],
-        det: [0, 3], tf: [1, 3], track: [1, 4], solve: [0, 4], pub: [0, 5], auto: [1, 5],
-      }).map(([id, [c, r]]) => [id, { x: c ? 258 : 82, y: 30 + r * 74 + (r > 2 ? 15 : 0), w: 0 }])),
-      edges: { 'auto>track': { bend: 0, lx: 264, ly: 382, anchor: 'start' } },
+        cam: [82, 56], sync: [258, 56], yolo: [258, 130], fit: [82, 130], comp: [82, 204], det: [258, 204],
+        tf: [258, 306], track: [82, 306], solve: [258, 380], pub: [258, 454], auto: [82, 417],
+      }).map(([id, [x, y]]) => [id, { x, y, w: 0 }])),
+      edges: { 'auto>track': { via: null, lx: 92, ly: 372, anchor: 'start' } },
     },
   });
   host.appendChild(note);

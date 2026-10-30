@@ -1,5 +1,6 @@
 // Node-and-edge diagrams (SVG). Nodes: {id, x, y, label, sub, shape: 'rect'|'circle'|'square', w, h, info}.
 // Edges: {from, to, label, bend, dash, width, color}. Hover or tap a node to light its neighbourhood.
+// Bands: labelled regions behind the nodes, {label, points: [[x, y], ...], lx, ly}; corners are rounded by the outline.
 import { el } from './chart.js';
 
 const measure = document.createElement('canvas').getContext('2d');
@@ -10,9 +11,9 @@ function textWidth(text, weight, size) {
 
 export class Graph {
   // `narrow`: an optional second layout for small screens, used while the container is narrower than `narrow.below`
-  // css px: { below, width, height, nodes: { id: { x, y, ... } }, edges: { 'from>to': { bend, via, lx, ly, anchor } } }.
-  constructor(container, { width = 900, height = 360, nodes = [], edges = [], onSelect, arrows = true, info, narrow } = {}) {
-    this.cfg = { width, height, nodes, edges, narrow };
+  // css px: { below, width, height, bands, nodes: { id: { x, y, ... } }, edges: { 'from>to': { bend, via, lx, ly, anchor } } }.
+  constructor(container, { width = 900, height = 360, nodes = [], edges = [], bands = [], onSelect, arrows = true, info, narrow } = {}) {
+    this.cfg = { width, height, nodes, edges, bands, narrow };
     this.container = container;
     this.arrows = arrows;
     this.onSelect = onSelect;
@@ -48,6 +49,12 @@ export class Graph {
     for (const [id, color] of [['arrow', 'var(--ink-2)'], ['arrow-hot', 'var(--accent)']]) {
       const mk = el('marker', { id: id + this.uid(), viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
       el('path', { d: 'M0,1 L9,5 L0,9 z', fill: color }, mk);
+    }
+    const gBands = el('g', {}, this.svg);
+    for (const b of (alt && alt.bands) || c.bands) {
+      el('path', { class: 'band', d: `M${b.points.map((q) => q.join(',')).join('L')}Z` }, gBands);
+      const t = el('text', { class: 'band-label', x: b.lx ?? b.points[0][0] + 4, y: b.ly ?? b.points[0][1] + 12 }, gBands);
+      t.textContent = b.label;
     }
     this.gEdges = el('g', {}, this.svg);
     this.gPulses = el('g', {}, this.svg);

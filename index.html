@@ -56,7 +56,7 @@
     </div>
     <figure class="fig">
       <div class="panel" id="pipeline-graph"></div>
-      <figcaption><b>The perception pipeline.</b> Top row: vision, one frame to a 3D pose. Bottom row: mapping, poses to a map published as TF frames. The behaviour tree chooses which props mapping may update.</figcaption>
+      <figcaption><b>The perception pipeline.</b> Vision turns one frame into 3D poses; only props made of several pieces go through composites. Mapping turns the poses into a map published as TF frames. The behaviour tree chooses which props mapping may update.</figcaption>
     </figure>
 
     <div class="prose">
