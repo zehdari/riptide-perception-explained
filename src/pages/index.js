@@ -15,7 +15,7 @@ const BASE = import.meta.env.BASE_URL;
   const hudOffset = document.getElementById('hud-offset'), hudLog = document.getElementById('hud-log');
   const inset = document.getElementById('cam-inset');
   // the detector's annotated image topic (yolo_orientation/annotated/compressed) from the same run, on the mission clock
-  const VIDEO = { src: 'video/cam_exact.mp4', t0: -0.01 };
+  const VIDEO = { src: 'video/cam_exact.mp4', t0: -0.04 };
   const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, preload: 'auto', src: `${BASE}${VIDEO.src}` });
   video.setAttribute('aria-label', "The camera Talos is using, with YOLO's masks and boxes");
   inset.prepend(video);

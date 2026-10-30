@@ -136,7 +136,7 @@
         <li>Seen items stay where they were seen; unseen items move with the table.</li>
         <li>Afterwards the baskets are pinned: new detections and retargeting don't move them.</li>
       </ul>
-      <p>On the exact-course Nereus run it ran: <code>Moved table by (-0.036, 0.033, -0.000) in map to fit the baskets, yawed table 0.3 deg; kept pill, plug, nut_and_bolt, bandage where they were seen</code>. The older combined <code>table</code> detection (<code>set_table_pair_enabled</code>) is switched off by the tree.</p>
+      <p>On the exact-course Nereus run it ran: <code>Moved table by (-0.046, 0.026, 0.003) in map to fit the baskets, yawed table 0.6 deg; kept pill, plug, nut_and_bolt, bandage where they were seen</code>. The older combined <code>table</code> detection (<code>set_table_pair_enabled</code>) is switched off by the tree.</p>
 
       <h2 id="binfit">The bin geometry fit</h2>
       <p><a href="https://github.com/osu-uwrt/riptide_perception/blob/mapping-estimator/riptide_mapping/riptide_mapping2/bin_geometry.py"><code>bin_geometry.py</code></a> is a self-described temporary competition hack. <code>mapping/fit_bin_geometry</code> fits the bin's CAD model to the two classified vinyls: x, y and yaw in closed form (the configured yaw breaks the 180° ambiguity). It refuses if the baseline differs from CAD by over 10 cm or the residual is over 10 cm. Height comes from the vinyls if they agree within 10 cm, else from config. The magnets and drop targets then sit where the CAD puts them, with variance at least 0.0025 m².</p>
