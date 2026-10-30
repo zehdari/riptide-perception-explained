@@ -92,6 +92,33 @@
         ],
         "createdAt": "2026-10-29T15:05:00.220Z",
         "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees 16px for every role; same shell as riptide-mpc-explained, where the rendered scan showed h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "calibration.html"
+        ],
+        "createdAt": "2026-10-30T01:31:50.862Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees one size for every role; same shell as the other chapters, rendered h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "training.html"
+        ],
+        "createdAt": "2026-10-30T01:31:50.870Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees one size for every role; same shell as the other chapters, rendered h1 64px, h2 34px, body 19px"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "workflow.html"
+        ],
+        "createdAt": "2026-10-30T01:31:50.875Z",
+        "reason": "agent: false positive; CSS is imported by JS (Vite) so the static scan sees one size for every role; same shell as the other chapters, rendered h1 64px, h2 34px, body 19px"
       }
     ]
   }

@@ -12,8 +12,10 @@
 .replay .btn.primary { min-width: 5.2rem; }
 .replay .scrub { flex: 1 1 14rem; display: grid; gap: 0.2rem; }
 .replay .scrub input { width: 100%; margin: 0; }
-.replay .phases { position: relative; height: 1.05rem; font-family: var(--sans); font-size: 0.66rem; color: var(--ink-2); }
-.replay .phases span { position: absolute; top: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; border-left: 1px solid var(--rule); padding-left: 3px; box-sizing: border-box; }
+.replay .phases { position: relative; height: 0.45rem; }
+.replay .phases span { position: absolute; top: 0; height: 100%; box-sizing: border-box; border-left: 2px solid var(--paper); background: var(--rule); border-radius: 2px; }
+.replay .phases span.on { background: var(--accent); }
+#phase-name { color: var(--accent); margin-right: 0.3rem; }
 .course-hero .hud { min-width: 16rem; max-width: 22rem; }
 .course-hero .hud .row b { text-align: right; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .course-hero .hud .logline { margin-top: 0.4rem; font-family: var(--mono); font-size: 0.7rem; line-height: 1.35; color: var(--ink); min-height: 2.7em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

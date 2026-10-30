@@ -22,6 +22,7 @@ const BASE = import.meta.env.BASE_URL;
   inset.hidden = false;
   const camWhen = document.getElementById('cam-when'), camText = document.getElementById('cam-text'), hudTree = document.getElementById('hud-tree');
   let shownCard = null;
+  const ph = document.getElementById('phases'), phaseName = document.getElementById('phase-name');
   const phone = matchMedia('(max-width: 720px)');
   let view, data, speed = 16, playing = false, last = 0, t = 0, end = 1;
 
@@ -33,6 +34,9 @@ const BASE = import.meta.env.BASE_URL;
     view.set(t);
     scrub.value = t;
     hudT.textContent = fmtT(t);
+    const phase = (data.phases || []).find(([s0, e0]) => t >= s0 && t < e0);
+    ph.querySelectorAll('span').forEach((el) => el.classList.toggle('on', !!phase && el.dataset.name === phase[2]));
+    phaseName.textContent = phase ? phase[2] : '';
     const tg = at(data.targets, t);
     hudTarget.textContent = tg ? (tg[1] ? tg[1].replace(/,\s*$/, '') : tg[2] ? 'none, map locked' : 'closest object') : '–';
     const off = at(data.offset, t);
@@ -96,26 +100,17 @@ const BASE = import.meta.env.BASE_URL;
     scrub.max = end;
     view = new CourseView(canvas, d, { insets: insets(), box: d.box });
     // the mission's phases under the scrubber
-    const ph = document.getElementById('phases');
     for (const [s, e, name] of d.phases || []) {
       const el = document.createElement('span');
       el.style.left = `${(s / end) * 100}%`;
       el.style.width = `${((e - s) / end) * 100}%`;
-      el.textContent = name;
       el.title = name;
       el.dataset.name = name;
       ph.appendChild(el);
     }
-    // a task too short to label in full gets its initial, or just its tick
-    const fitPhases = () => ph.querySelectorAll('span').forEach((el) => {
-      el.textContent = el.dataset.name;
-      if (el.scrollWidth > el.clientWidth + 1) el.textContent = el.dataset.name[0];
-      if (el.scrollWidth > el.clientWidth + 1) el.textContent = '';
-    });
-    fitPhases();
     t = d.start || 0;
     update();
-    addEventListener('resize', () => { fitPhases(); update(); });
+    addEventListener('resize', update);
     // Start playing once the hero is on screen
     new IntersectionObserver((es, ob) => {
       if (es[0].isIntersecting && !matchMedia('(prefers-reduced-motion: reduce)').matches) { setPlaying(true); ob.disconnect(); }

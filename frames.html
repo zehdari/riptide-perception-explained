@@ -107,7 +107,7 @@
       <ol>
         <li><code>mapping/start_binary_classifier</code> starts <strong>acquire_first</strong>: detections fill a rolling buffer (at most 500, each dropped after 8 s).</li>
         <li>When a cluster is dense enough, its centroid becomes instance 1 (<strong>track_first</strong>). Detections within 0.2 m are fused into it and nudge it (α = 0.15); others are rejected.</li>
-        <li>Autonomy can <strong>freeze</strong> the buffer during the first target, so detections of the second vinyl survive.</li>
+        <li>Autonomy can <strong>freeze</strong> the buffer during the first target: nothing is added and nothing expires, so detections of the second vinyl survive. Only the buffer freezes: <code>bin_target1</code> keeps tracking and following its detections.</li>
         <li><code>mapping/start_binary_classifier_second</code> starts <strong>acquire_second</strong>: look for a buffered cluster at least 0.4 m from instance 1, and reject live detections within 0.3 m of it. A match locks as instance 2 (<strong>track_second</strong>) at once.</li>
         <li><code>mapping/stop_binary_classifier</code> returns to normal fusion.</li>
       </ol>
